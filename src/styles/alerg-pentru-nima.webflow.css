@@ -53,6 +53,11 @@ a:hover {
   transition: opacity 0.5s ease-in-out; /* Adjust duration and easing as needed */
 }
 
+.edi-image {
+  opacity: 0; /* Start with opacity 0 */
+  transition: opacity 0.5s ease-in-out; /* Smooth transition */
+}
+
 .fade-in {
   opacity: 1;
 }
@@ -198,10 +203,12 @@ a:hover {
 
 .paragraph_emphasis.orange {
   color: var(--orange);
+  font-variation-settings: "wght" 653;
 }
 
 .paragraph_emphasis.orange.link:hover, .paragraph_emphasis.white {
   color: var(--white);
+  text-decoration: underline;
 }
 
 .paragraph_emphasis.white-link {
@@ -210,6 +217,7 @@ a:hover {
   -webkit-text-decoration-color: var(--white);
   text-decoration-color: var(--white);
   font-size: 1.2rem;
+  text-decoration: underline;
 }
 
 .paragraph_emphasis.white-link:hover {
