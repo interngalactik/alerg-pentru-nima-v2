@@ -1,4 +1,5 @@
 'use client'
+import RacesTable from './RacesTable'
 
 export default function Calendar() {
   return (
@@ -8,10 +9,11 @@ export default function Calendar() {
         <h2 className="heading">Calendar competiții</h2>
         <div className="_15-spacer"></div>
         <div className="table_section">
-          <a href="#" className="paragraph table_year">&lt; 2024</a>
+          {/* <a href="#" className="paragraph table_year">&lt; 2024</a> */}
           <div className="_15-spacer"></div>
           <div className="table_wrapper">
             {/* Table content will be populated from Google Sheets */}
+            <RacesTable />
           </div>
         </div>
         <div className="_60_spacer"></div>
