@@ -28,7 +28,7 @@ a:hover {
 
 .section.hero-section {
   background-color: var(--white);
-  height: 964px;
+  height: 100vh;
 }
 
 .section.blue {
@@ -67,6 +67,7 @@ a:hover {
 }
 
 .container {
+  max-width: 1520px;
   z-index: 2;
   flex-flow: column;
   justify-content: flex-start;
@@ -482,6 +483,7 @@ a:hover {
   .hero-image {
     object-fit: cover;
     height: 100%;
+    
   }
 
   .despre-campanie_wrapper {

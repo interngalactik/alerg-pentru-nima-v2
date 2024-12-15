@@ -9,13 +9,12 @@ export default function Sponsors() {
   const isInView = useInView(sectionRef, { 
     once: true, 
     margin: "-20% 0px -20% 0px",
-    amount: 0.5
+    amount: 0.4
   })
 
   return (
     <section className="section" ref={sectionRef}>
       <div className="container centered" style={{ 
-        minHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center'

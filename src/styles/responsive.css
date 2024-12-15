@@ -9,11 +9,6 @@ body {
   }
 }
 
-/* Container Max Width */
-.container {
-  max-width: 1520px;
-}
-
 /* Min Font Size */
 @media screen and (max-width:767px) {
   body {
@@ -21,32 +16,129 @@ body {
   }
 }
 
+/* Hero image positioning */
 .hero-image {
   position: relative;
-  inset: 0%;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  transform: translateX(0);
+  position: relative;
+    inset: 0% 0% 0% 5%;
 }
 
-@media screen and (max-width:1792px) {
+/* .hero-image_wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  overflow: hidden;
+  width: 100%;
+} */
+
+@media screen and (max-width: 1792px) {
   .hero-image {
     position: relative;
     inset: 0% 0% 0% 5%;
+    width: 110%; /* Slightly wider to account for offset */
+    height: 100%;
   }
 }
 
-@media screen and (max-width:1680px) {
+@media screen and (max-width: 1680px) {
   .hero-image {
     position: relative;
     inset: 0% 0% 0% 7%;
+    width: 115%;
   }
 }
 
-@media screen and (max-width:1520px) {
+@media screen and (max-width: 1520px) {
   .hero-image {
-    position: relative;
-    inset: 0% 0% 0% 10%;
+    width: 120%;
+    inset: 0% 0% 0% 15%
   }
   .section.hero-section {
     height: 60em;
+  }
+}
+
+@media screen and (max-width: 767px) {
+  .section.hero-section {
+    min-height: 100vh;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .container.hero {
+    padding: 1em;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-text_wrapper {
+    padding: 0;
+    order: 2;
+  }
+
+  .hero-image_wrapper.mobile {
+    position: relative;
+    width: 100%;
+    height: auto;
+    margin: 2rem 0;
+    order: 3;
+  }
+
+  .hero-image {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    transform: none;
+    inset: 0% 0% 0% 0%;
+  }
+
+  .cutout {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .progress_wrapper {
+    order: 4;
+    width: 100%;
+  }
+
+  ._100-spacer.hero {
+    height: 1.5rem;
+  }
+
+  ._30-spacer {
+    height: 1rem;
+  }
+
+  ._15-spacer {
+    height: 0.75rem;
+  }
+
+  .heading.hero {
+    line-height: 1;
+  }
+
+  .paragraph {
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+}
+
+/* Hide mobile wrapper on desktop */
+@media screen and (min-width: 768px) {
+  .hero-image_wrapper.mobile {
+    display: none;
   }
 }
 
@@ -68,9 +160,199 @@ body {
   }
 }
 
-@media screen and (max-width:767px) {
-  .hero-image {
+/* Add these styles */
+.section.blue-transparent {
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  margin-right: calc(-50vw + 50%);
+  position: relative;
+  left: 50%;
+  right: 50%;
+  transform: translateX(-50%);
+}
+
+@media screen and (max-width: 767px) {
+  .section.blue-transparent {
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+  }
+
+  .hero-paragraph_wrapper .paragraph_emphasis {
+    font-variation-settings: "wght" 600;
+  }
+
+  .container.centered {
+    width: 100%;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    margin: 0;
+  }
+
+  .despre-campanie_wrapper {
+    width: 100%;
+  }
+}
+
+/* Base styles for parallax image */
+.parallax_scrolling-image {
+    filter: blur(.06rem);
+      object-fit: cover;
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      inset: 0%;
+    }
+
+@media screen and (max-width: 767px) {
+  .parallax_scrolling-image {
+  filter: blur(.06rem);
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    inset: 0%;
+  }
+
+ .logo_placeholder {
+  width: 12em!important;
+ }
+
+ .table-container {
+    overflow-x: auto; /* Enable horizontal scrolling */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+.table_section {
+  max-width: 100%;
+}
+
+  /* Fix container overflow */
+  body {
+    overflow-x: hidden;
+  }
+
+  .section {
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+}
+
+/* Global mobile fixes */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Base container styles */
+.container {
+  max-width: 1520px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 1rem;
+  box-sizing: border-box;
+}
+
+/* Mobile styles */
+@media screen and (max-width: 767px) {
+  /* Section fixes */
+  .section {
+    width: 100%;
+    padding: 2rem 0;
+    overflow: hidden;
     position: relative;
-    inset: 0% 0% 0% 0%;
+  }
+
+  /* Container adjustments */
+  .container {
+    padding: 0 1rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Hero section specific */
+  .section.hero-section {
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .hero-text_wrapper {
+    text-align: left;
+    padding: 0;
+  }
+
+  /* Image handling */
+  .hero-image_wrapper.mobile {
+    margin: 1rem -1rem;
+    width: calc(100% + 2rem);
+  }
+
+  .hero-image {
+    border-radius: 0;
+    width: 100%;
+  }
+
+  /* About section */
+  .section.blue-transparent {
+    width: 100%;
+    margin: 0;
+    padding: 2rem 0;
+  }
+
+  .despre-campanie_wrapper {
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  /* Parallax image */
+  .parallax_scrolling-image {
+    width: 100%;
+    margin: 0;
+    left: 0;
+    transform: none;
+  }
+
+  /* Spacing adjustments */
+  ._100-spacer {
+    height: 3rem;
+  }
+
+  ._60-spacer {
+    height: 2rem;
+  }
+
+  ._30-spacer {
+    height: 1rem;
+  }
+
+  ._15-spacer {
+    height: 0.75rem;
+  }
+
+  /* Typography */
+  .heading {
+    line-height: 1.2;
+  }
+
+  .paragraph {
+    font-size: 1rem;
+    line-height: 1.25;
+  }
+
+  /* Progress bars */
+  .progress_wrapper {
+    width: 100%;
+  }
+
+  /* Table adjustments */
+  .table_wrapper {
+    margin: 0 -1rem;
+    width: calc(100% + 2rem);
+    overflow-x: auto;
   }
 } 

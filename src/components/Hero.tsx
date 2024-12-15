@@ -261,7 +261,11 @@ export default function Hero() {
           <h1 className="heading hero">Susține Sanctuarul Nima</h1>
           <div className="_15-spacer"></div>
           <div className="hero-paragraph_wrapper">
-            <p className="paragraph">Donează <span className="paragraph_emphasis">2 euro / lună</span> pentru hrana animalelor salvate de la abator sau exploatare — <span className="paragraph_emphasis">trimite NIMA prin SMS la 8845</span> iar eu voi alerga pentru fiecare mesaj în parte.</p>
+            <p className="paragraph">Donează <span className="paragraph_emphasis">2 euro / lună</span> pentru hrana animalelor salvate de la abator sau exploatare — 
+            <a
+                href="sms:8845?body=NIMA"
+                className="underline paragraph_emphasis"
+              >trimite NIMA la 8845</a> iar eu voi alerga pentru fiecare mesaj în parte.</p>
           </div>
           <div className="_15-spacer"></div>
           <a href="#despre" onClick={scrollToAbout} className="button w-button">Vezi detalii</a>
