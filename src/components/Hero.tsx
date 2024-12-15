@@ -185,9 +185,19 @@ export default function Hero() {
         {/* Hero Text Section */}
         <motion.div 
           className="hero-text_wrapper"
-          initial="hidden"
-          animate="visible"
-          variants={fadeInUp}
+          initial={{ 
+            opacity: 0,
+            x: 100 // Start 100px to the right
+          }}
+          animate={{ 
+            opacity: 1,
+            x: 0 // Slide to original position
+          }}
+          transition={{ 
+            duration: 0.8,
+            ease: "easeOut",
+            delay: 0.2
+          }}
         >
           <h2 className="heading-small">Alătură-te altor <span className="heading-small-emphasis">{progress.smsCount}</span> persoane</h2>
           <h1 className="heading hero">Susține Sanctuarul Nima</h1>
@@ -227,28 +237,37 @@ export default function Hero() {
         {/* Progress Bars */}
         <motion.div 
           className="progress_wrapper"
-          initial="hidden"
-          animate="visible"
-          variants={fadeInUp}
-          transition={{ delay: 0.3 }}
+          initial={{ 
+            opacity: 0,
+            x: 100 // Start 100px to the right
+          }}
+          animate={{ 
+            opacity: 1,
+            x: 0 // Slide to original position
+          }}
+          transition={{ 
+            duration: 0.8,
+            ease: "easeOut",
+            delay: 0.4 // Slightly delayed after hero text
+          }}
         >
           <p className="paragraph smaller">KM*</p>
           <div className="progress-graphic_wrapper">
-          {progress.kmRun === 0 ? ( // Check if kmRun is 0
-      <div className="loading-indicator">LOADING...</div> // Show loading indicator
-    ) : (
-      <>
-        <div className="paragraph progress-numbers">
-          {progress.kmRun}/{progress.kmGoal}
-        </div>
-        <motion.div 
-          className="progress-fill"
-          initial={{ width: 0 }}
-          animate={{ width: `${(progress.kmRun / progress.kmGoal) * 100}%` }}
-          transition={{ duration: 1, delay: 0.5 }}
-        />
-      </>
-    )}
+            {progress.kmRun === 0 ? (
+              <div className="loading-indicator">LOADING...</div>
+            ) : (
+              <>
+                <div className="paragraph progress-numbers">
+                  {progress.kmRun}/{progress.kmGoal}
+                </div>
+                <motion.div 
+                  className="progress-fill"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(progress.kmRun / progress.kmGoal) * 100}%` }}
+                  transition={{ duration: 1, delay: 0.5 }}
+                />
+              </>
+            )}
           </div>
           <p className="paragraph smaller">* kilometri alergați de la începutul campaniei</p>
         </motion.div>
@@ -257,27 +276,36 @@ export default function Hero() {
 
         <motion.div 
           className="progress_wrapper"
-          initial="hidden"
-          animate="visible"
-          variants={fadeInUp}
-          transition={{ delay: 0.4 }}
+          initial={{ 
+            opacity: 0,
+            x: 100 // Start 100px to the right
+          }}
+          animate={{ 
+            opacity: 1,
+            x: 0 // Slide to original position
+          }}
+          transition={{ 
+            duration: 0.8,
+            ease: "easeOut",
+            delay: 0.6 // Further delayed after first progress bar
+          }}
         >
           <p className="paragraph smaller">SMS**</p>
           <div className="progress-graphic_wrapper">
-            {progress.smsCount === 0 ? ( // Check if smsCount is 0
-              <div className="loading-indicator">LOADING...</div> // Show loading indicator
+            {progress.smsCount === 0 ? (
+              <div className="loading-indicator">LOADING...</div>
             ) : (
               <>
                 <div className="paragraph progress-numbers">
                   {progress.smsCount}/{progress.smsGoal}
                 </div>
-            <motion.div 
-              className="progress-fill"
-              initial={{ width: 0 }}
-              animate={{ width: `${(progress.smsCount / progress.smsGoal) * 100}%` }}
-              transition={{ duration: 1, delay: 0.6 }}
-            />
-            </>
+                <motion.div 
+                  className="progress-fill"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(progress.smsCount / progress.smsGoal) * 100}%` }}
+                  transition={{ duration: 1, delay: 0.6 }}
+                />
+              </>
             )}
           </div>
           <p className="paragraph smaller">** donațiile active din cele necesare hranei animăluțelor în fiecare lună</p>
