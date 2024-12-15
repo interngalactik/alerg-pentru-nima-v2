@@ -9,7 +9,7 @@ export default function Sponsors() {
   const isInView = useInView(sectionRef, { 
     once: true, 
     margin: "-20% 0px -20% 0px",
-    amount: 0.6
+    amount: 0.5
   })
 
   return (

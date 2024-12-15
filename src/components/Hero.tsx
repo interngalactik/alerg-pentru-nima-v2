@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { STRAVA_CALL_REFRESH, STRAVA_CALL_ACTIVITIES } from '../lib/constants';
@@ -22,6 +22,7 @@ export default function Hero() {
   const [isLoading, setIsLoading] = useState(true);
   const [runs, setRuns] = useState<StravaActivity[]>([]);
   const [error, setError] = useState<string | null>(null); // State for error
+  const [lastKmRun, setLastKmRun] = useState(0);
 
   // Fetch SMS count function
   const fetchSmsCount = async () => {
@@ -73,13 +74,70 @@ export default function Hero() {
     return CryptoJS.SHA1(str).toString();
   };
 
-  useEffect(() => {
-    fetch(STRAVA_CALL_REFRESH, {
+  // Function to check for updates
+  const checkForUpdates = useCallback(async () => {
+    // Check if we should update based on last check time
+    const lastCheckTime = localStorage.getItem('lastCheckTime');
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+
+    if (lastCheckTime && (now - parseInt(lastCheckTime)) < fifteenMinutes) {
+      console.log('Skipping check - less than 15 minutes since last check');
+      return;
+    }
+
+    console.log('Checking for updates...');
+    try {
+      // Fetch Strava data
+      const refreshResponse = await fetch(STRAVA_CALL_REFRESH, {
         method: 'POST'
-    })
-    .then(res => res.json())
-    .then(result => getActivities(result.access_token))
-  }, [STRAVA_CALL_REFRESH]);
+      });
+      const refreshData = await refreshResponse.json();
+      
+      // Get activities with new token
+      const endpoints = [
+        `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=1'}`,
+        `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=2'}`
+      ];
+      
+      const responses = await Promise.all(endpoints.map(endpoint => fetch(endpoint)));
+      const allActivities = await Promise.all(responses.map(res => res.json()));
+      
+      let ALL_ACTIVITIES: StravaActivity[] = [];
+      allActivities.forEach((activityArray) => {
+        ALL_ACTIVITIES = ALL_ACTIVITIES.concat(activityArray);
+      });
+      
+      const runs = ALL_ACTIVITIES.filter(activity => activity.type === 'Run');
+      const totalDistanceMeters = runs.reduce((acc, run) => acc + run.distance, 0);
+      const totalDistanceKm = Math.round(totalDistanceMeters * 100 / 1000) / 100;
+
+      // Update only if there's a change
+      if (totalDistanceKm !== lastKmRun) {
+        setProgress(prev => ({ ...prev, kmRun: totalDistanceKm }));
+        setLastKmRun(totalDistanceKm);
+        localStorage.setItem('lastKmRun', totalDistanceKm.toString());
+      }
+
+      // Save check time after successful update
+      localStorage.setItem('lastCheckTime', now.toString());
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+    }
+  }, [lastKmRun]);
+
+  // Load saved kmRun on mount
+  useEffect(() => {
+    const savedKmRun = localStorage.getItem('lastKmRun');
+    if (savedKmRun) {
+      const kmRun = parseFloat(savedKmRun);
+      setProgress(prev => ({ ...prev, kmRun }));
+      setLastKmRun(kmRun);
+    }
+    
+    // Check for updates if it's been more than 15 minutes
+    checkForUpdates();
+  }, []);
 
   function getActivities(access: string) {
     const endpoints = [`${STRAVA_CALL_ACTIVITIES + access + `&page=1`}`,`${STRAVA_CALL_ACTIVITIES + access + `&page=2`}`];
