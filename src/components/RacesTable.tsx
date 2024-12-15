@@ -132,10 +132,10 @@ const RacesTable = () => {
           <TableHead>
             <TableRow>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }}>Data</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Competiție</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="left">Competiție</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Distanța (km)</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Diferența de nivel (m)</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Status</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="left">Status</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Timp</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">General</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Categorie de vârstă</TableCell>
@@ -189,14 +189,14 @@ const RacesTable = () => {
                   <TableCell component="th" scope="row" sx={{ color: 'white' }}>
                     {race.date}
                   </TableCell>
-                  <TableCell align="right" sx={{ color: 'white' }}>
+                  <TableCell align="left" sx={{ color: 'white' }}>
                     <a href={race.link} target="_blank" rel="noopener noreferrer" className="underline hover:text-success duration-200 transition-colors">
                       {race.name}
                     </a>
                   </TableCell>
                   <TableCell align="right" sx={{ color: 'white' }}>{race.distance}</TableCell>
                   <TableCell align="right" sx={{ color: 'white' }}>{race.elevationGain}</TableCell>
-                  <TableCell align="right" sx={{ color: 'white' }}>{race.status ? race.status : '-'}</TableCell>
+                  <TableCell align="left" sx={{ color: 'white' }}>{race.status ? race.status : '-'}</TableCell>
                   <TableCell align="right" sx={{ color: 'white' }}>{race.time ? race.time : '-'}</TableCell>
                   <TableCell align="right" sx={{ color: 'white' }}>{race.generalPlace ? race.generalPlace : '-'}</TableCell>
                   <TableCell align="right" sx={{ color: 'white' }}>{race.categoryPlace ? race.categoryPlace : '-'}</TableCell>

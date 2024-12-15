@@ -1,0 +1,76 @@
+body {
+  font-size: 1.0526315789473684vw;
+}
+
+/* Max Font Size */
+@media screen and (min-width:1520px) {
+  body {
+    font-size: 15.999999999999998px;
+  }
+}
+
+/* Container Max Width */
+.container {
+  max-width: 1520px;
+}
+
+/* Min Font Size */
+@media screen and (max-width:767px) {
+  body {
+    font-size: 8.073684210526315px;
+  }
+}
+
+.hero-image {
+  position: relative;
+  inset: 0%;
+}
+
+@media screen and (max-width:1792px) {
+  .hero-image {
+    position: relative;
+    inset: 0% 0% 0% 5%;
+  }
+}
+
+@media screen and (max-width:1680px) {
+  .hero-image {
+    position: relative;
+    inset: 0% 0% 0% 7%;
+  }
+}
+
+@media screen and (max-width:1520px) {
+  .hero-image {
+    position: relative;
+    inset: 0% 0% 0% 10%;
+  }
+  .section.hero-section {
+    height: 60em;
+  }
+}
+
+@media screen and (max-width:1500px) {
+  .section.hero-section {
+    height: 60.9em;
+  }
+}
+
+@media screen and (max-width:1112px) {
+  ._100-spacer.hero {
+    height: 4.25em;
+  }
+}
+
+@media screen and (max-width:991px) {
+  .section.hero-section {
+    height: auto;
+  }
+}
+
+@media screen and (max-width:767px) {
+  .hero-image {
+    position: relative;
+    inset: 0% 0% 0% 0%;
+  }
+} 
