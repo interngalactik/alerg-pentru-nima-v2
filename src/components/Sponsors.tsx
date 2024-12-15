@@ -8,12 +8,18 @@ export default function Sponsors() {
   const sectionRef = useRef(null)
   const isInView = useInView(sectionRef, { 
     once: true, 
-    margin: "-20% 0px -20% 0px" 
+    margin: "-20% 0px -20% 0px",
+    amount: 0.6
   })
 
   return (
     <section className="section" ref={sectionRef}>
-      <div className="container centered">
+      <div className="container centered" style={{ 
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center'
+      }}>
         <div className="_60_spacer"></div>
         <h2 className="heading">Sponsori</h2>
         <div className="_15-spacer"></div>
@@ -59,7 +65,8 @@ export default function Sponsors() {
               width: '200px', 
               height: 'auto',
               opacity: isInView ? 1 : 0,
-              transition: 'opacity 0.6s ease-out'
+              transform: isInView ? 'scale(1)' : 'scale(0.6)',
+              transition: 'opacity 0.6s ease-out, transform 0.6s ease-out'
             }}
           />
           <motion.img 
@@ -72,7 +79,8 @@ export default function Sponsors() {
               width: '200px', 
               height: 'auto',
               opacity: isInView ? 1 : 0,
-              transition: 'opacity 0.6s ease-out 0.2s'
+              transform: isInView ? 'scale(1)' : 'scale(0.6)',
+              transition: 'opacity 0.6s ease-out 0.2s, transform 0.6s ease-out 0.2s'
             }}
           />
           <motion.img 
@@ -85,7 +93,8 @@ export default function Sponsors() {
               width: '200px', 
               height: 'auto',
               opacity: isInView ? 1 : 0,
-              transition: 'opacity 0.6s ease-out 0.4s'
+              transform: isInView ? 'scale(1)' : 'scale(0.6)',
+              transition: 'opacity 0.6s ease-out 0.4s, transform 0.6s ease-out 0.4s'
             }}
           />
         </div>
