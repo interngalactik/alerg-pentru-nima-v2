@@ -6,7 +6,7 @@ import { useRef } from 'react'
 
 export default function About() {
   const sectionRef = useRef(null)
-  const isInView = useInView(sectionRef, { once: true, margin: "-100px" })
+  const isInView = useInView(sectionRef, { once: true, margin: "-20% 0px -20% 0px" })
 
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -17,6 +17,17 @@ export default function About() {
         duration: 0.6,
         ease: "easeOut"
       }
+    }
+  };
+
+  const scrollToTerms = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    const termsSection = document.querySelector('#termene');
+    if (termsSection) {
+      termsSection.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
     }
   };
 
@@ -94,6 +105,7 @@ export default function About() {
                 initial="hidden"
                 animate={isInView ? "visible" : "hidden"}
                 transition={{ delay: 0.4 }}
+                onClick={scrollToTerms}
               >
                 Termene și condiții
               </motion.a>
