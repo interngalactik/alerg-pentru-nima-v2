@@ -1,41 +1,62 @@
 'use client'
 
-import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import { useRef } from 'react'
+import Image from 'next/image'
+import { motion, useInView } from 'framer-motion'
 
 export default function Runner() {
-  const [fadeIn, setFadeIn] = useState(false); // State for fade-in animation
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setFadeIn(true); // Trigger fade-in after a delay
-    }, 100); // Adjust the delay as needed
-
-    return () => clearTimeout(timer); // Cleanup on unmount
-  }, []);
+  const sectionRef = useRef(null)
+  const isInView = useInView(sectionRef, { 
+    once: true,
+    amount: 0.3 // Trigger when 30% of the element is in view
+  })
 
   return (
-    <section className="section blue">
+    <section className="section blue" ref={sectionRef}>
       <div className="container centered">
         <div className="_60_spacer"></div>
         <div className="edi_image-wrapper">
-          <Image 
+          <motion.img 
             className="edi-image"
             src="/images/edi_layer1.png"
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            style={{ opacity: fadeIn ? 1 : 0, transition: 'opacity 0.5s ease-in-out' }} // Fade-in effect
+            style={{ opacity: 0, scale: 0.8 }}
+            animate={{ 
+              opacity: isInView ? 1 : 0,
+              scale: isInView ? 1 : 0.8
+            }}
+            transition={{ 
+              duration: 0.4,
+              ease: "easeOut"
+            }}
+            data-w-id="496f3ce3-0eb5-b2db-57c2-7ae2c9ab4783"
             loading="eager"
+            sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
           />
-          <Image 
+          <motion.img 
             className="edi-image _2"
             src="/images/edi_layer2.png"
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            style={{ opacity: fadeIn ? 1 : 0, transition: 'opacity 0.5s ease-in-out' }} // Fade-in effect
+            style={{ 
+              opacity: 0, 
+              y: -80 // Start 80px up
+            }}
+            animate={{ 
+              opacity: isInView ? 1 : 0,
+              y: isInView ? 0 : -80 // Slide down to original position
+            }}
+            transition={{ 
+              duration: 0.6,
+              delay: 0.4,
+              ease: "easeOut"
+            }}
+            data-w-id="5706c8c5-5b62-cf07-7dc9-81cbe0889180"
             loading="eager"
+            sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
           />
         </div>
         <div className="paragraph smaller white">
@@ -51,5 +72,5 @@ export default function Runner() {
         <div className="_100-spacer"></div>
       </div>
     </section>
-  );
+  )
 }
