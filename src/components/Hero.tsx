@@ -59,7 +59,11 @@ export default function Hero() {
         setError(`Error: ${response.status}`);
       }
     } catch (err) {
-      setError(`Fetch error: ${err.message}`);
+      if (err instanceof Error) {
+        setError(`Fetch error: ${err.message}`);
+      } else {
+        setError('Fetch error: Unknown error occurred');
+      }
     }
   };
 
