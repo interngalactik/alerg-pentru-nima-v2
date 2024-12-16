@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Ignore Firebase debug log
+firebase-debug.log
+
+# Ignore Firebase config
+firebase.json

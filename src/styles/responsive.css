@@ -356,3 +356,89 @@ html, body {
     overflow-x: auto;
   }
 } 
+
+.despre-campanie_text-wrapper {
+  text-align: center;
+}
+
+@media screen and (max-width: 767px) {
+  .despre-campanie_text-wrapper {
+    text-align: center;
+    width: 100%;
+  }
+
+  .despre-campanie_text-wrapper .paragraph {
+    text-align: justify; /* Keep paragraph text justified */
+  }
+} 
+
+.despre-campanie_wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-columns: 1fr;
+  grid-column-gap: 6.9375em;
+  grid-row-gap: 6.9375em;
+  align-items: center;
+}
+
+.despre-campanie_images-wrapper {
+  grid-column: 1;
+  margin-left: 0;
+  position: relative;
+  width: 733px;
+}
+
+.despre-campanie_text-wrapper {
+  grid-column: 2;
+  width: 100%;
+  text-align: left;
+}
+
+.despre-campanie_image {
+  width: 100%;
+  height: auto;
+}
+
+.despre-campanie_image._2 {
+  position: absolute;
+  inset: 0%;
+}
+
+.despre-campanie_text-wrapper .heading.white {
+  color: var(--white);
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: Nohemi Vf, Arial, sans-serif;
+  font-size: 3.6875em;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.despre-campanie_text-wrapper .paragraph.white {
+  opacity: .95;
+  color: var(--white);
+  font-variation-settings: "wght" 251;
+  text-align: justify;
+}
+
+@media screen and (max-width: 991px) {
+  .despre-campanie_wrapper {
+    grid-template-columns: 1fr;
+    gap: 4em;
+  }
+
+  .despre-campanie_text-wrapper,
+  .despre-campanie_images-wrapper {
+    grid-column: 1;
+    width: 100%;
+  }
+}
+
+@media screen and (max-width: 767px) {
+  .despre-campanie_text-wrapper,
+  .despre-campanie_images-wrapper {
+    width: 100%;
+  }
+} 

@@ -40,7 +40,7 @@ export default function About() {
   return (
     <>
       <section id="despre" className="section blue-transparent" ref={sectionRef}>
-        <div className="container centered">
+        <div className="container centered despre-campanie_wrapper">
           <div className="_100-spacer"></div>
           <motion.div 
             className="despre-campanie_images-wrapper"
@@ -129,14 +129,7 @@ export default function About() {
         loading="eager"
         sizes="100vw"
         className="parallax_scrolling-image"
-        srcSet={`
-          /images/sanctuarul_nima-p-500.webp 500w,
-          /images/sanctuarul_nima-p-800.webp 800w,
-          /images/sanctuarul_nima-p-1080.webp 1080w,
-          /images/sanctuarul_nima-p-1600.webp 1600w,
-          /images/sanctuarul_nima-p-2000.webp 2000w,
-          /images/sanctuarul_nima.webp 2048w
-        `}
+        quality={100}
       />
     </>
   )
