@@ -168,7 +168,9 @@ a:hover {
 
 .paragraph.progress-numbers {
   z-index: 5;
-  color: var(--blue);
+  color: var(--white);
+  -webkit-text-stroke: 3px var(--orange);
+  paint-order: stroke fill;
   font-variation-settings: "wght" 583;
   font-size: 1.125rem;
   position: relative;

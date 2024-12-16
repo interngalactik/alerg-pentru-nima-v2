@@ -72,7 +72,7 @@ export default function Hero() {
     const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
 
     return () => clearInterval(intervalId); // Cleanup on unmount
-  }, []); // Empty dependency array means this runs once on mount
+  }, [fetchSmsCount]);
 
   const sha1 = (str: string) => {
     return CryptoJS.SHA1(str).toString();
@@ -141,7 +141,7 @@ export default function Hero() {
     
     // Check for updates if it's been more than 15 minutes
     checkForUpdates();
-  }, []);
+  }, [checkForUpdates]);
 
   // function getActivities(access: string) {
   //   const endpoints = [`${STRAVA_CALL_ACTIVITIES + access + `&page=1`}`,`${STRAVA_CALL_ACTIVITIES + access + `&page=2`}`];
@@ -170,11 +170,7 @@ export default function Hero() {
   //   }
   // }
 
-  useEffect(() => {
-    showTotalDistance();
-  }, [showTotalDistance]);
-
-  function showTotalDistance() {
+  const showTotalDistance = useCallback(() => {
     if (isLoading) return <>LOADING</>;
     if (!isLoading) {
       console.log();
@@ -187,7 +183,11 @@ export default function Hero() {
       setProgress(prev => ({ ...prev, kmRun: totalDistanceKm }));
       return totalDistanceKm;
     }
-  }
+  }, [isLoading, runs]);
+
+  useEffect(() => {
+    showTotalDistance();
+  }, [showTotalDistance]);
 
   // Animation variants
   // const fadeInUp = {
