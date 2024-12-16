@@ -8,14 +8,14 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Button,
+  // Button,
   Typography,
   Box,
   CircularProgress,
-  Tooltip,
-  IconButton,
+  // Tooltip,
+  // IconButton,
 } from '@mui/material';
-import { ArrowForward } from '@mui/icons-material'; // Importing an icon for visual enhancement
+// import { ArrowForward } from '@mui/icons-material'; // Importing an icon for visual enhancement
 
 interface Race {
   date: string;
@@ -46,7 +46,7 @@ const RacesTable = () => {
   const [csvData, setCsvData] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [spreadsheetId, setSpreadsheetId] = useState('2PACX-1vSHYqZ9S0Q9pbMy97P1rYquyNr9897G6LsV_YP4_bBRxyoX-3hOspdM-iR0Z7Nf15JByZhvLwDwTMES');
+  const [spreadsheetId] = useState('2PACX-1vSHYqZ9S0Q9pbMy97P1rYquyNr9897G6LsV_YP4_bBRxyoX-3hOspdM-iR0Z7Nf15JByZhvLwDwTMES');
   const [sheetId, setSheetId] = useState(getInitialSheetId());
 
   const fetchData = async (sheetId: string) => {
@@ -63,15 +63,15 @@ const RacesTable = () => {
         header: true, // Use the first row as header
         skipEmptyLines: true, // Skip empty lines
         complete: (results) => {
-          setCsvData(results.data); // Set the parsed data
+          setCsvData(results.data as Race[]); // Set the parsed data
         },
-        error: (err) => {
+        error: (err: Error) => {
           setError(err.message); // Handle parsing errors
         },
       });
-    } catch (err) {
-      console.error('Fetch error:', err); // Log the error for debugging
-      setError(err.message); // Set the error message
+    } catch (err: unknown) {
+      console.error('Fetch error:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false); // Stop loading
     }

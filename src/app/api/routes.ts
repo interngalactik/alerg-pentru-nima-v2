@@ -13,6 +13,6 @@ export async function GET() {
       smsGoal: 6000
     })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 })
+    return NextResponse.json({ error: `Failed to fetch data: ${error instanceof Error ? error.message : 'Unknown error'}` }, { status: 500 })
   }
 }

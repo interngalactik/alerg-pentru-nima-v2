@@ -39,12 +39,6 @@ export default function Sponsors() {
           alt=""
           sizes="(max-width: 479px) 93vw, (max-width: 767px) 346.15625px, 45vw"
           className="tshirt-logo_image"
-          srcSet={`
-            /images/tshirt_logo_1tshirt_logo.webp 500w,
-            /images/tshirt_logo_1tshirt_logo.webp 800w,
-            /images/tshirt_logo_1tshirt_logo.webp 1080w,
-            /images/tshirt_logo_1.webp 1382w
-          `}
         />
 
         <div className="logos_wrapper" style={{ 

@@ -168,7 +168,7 @@ a:hover {
 
 .paragraph.progress-numbers {
   z-index: 5;
-  color: var(--white);
+  color: var(--blue);
   font-variation-settings: "wght" 583;
   font-size: 1.125rem;
   position: relative;
@@ -263,7 +263,7 @@ a:hover {
 }
 
 .progress_wrapper {
-  width: 38.5em;
+  width: 45em;
 }
 
 .progress-graphic_wrapper {

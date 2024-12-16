@@ -19,8 +19,8 @@ export default function Hero() {
     smsGoal: 7000
   });
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [runs, setRuns] = useState<StravaActivity[]>([]);
+  const [isLoading] = useState(true);
+  const [runs] = useState<StravaActivity[]>([]);
   const [error, setError] = useState<string | null>(null); // State for error
   const [lastKmRun, setLastKmRun] = useState(0);
 
@@ -143,36 +143,36 @@ export default function Hero() {
     checkForUpdates();
   }, []);
 
-  function getActivities(access: string) {
-    const endpoints = [`${STRAVA_CALL_ACTIVITIES + access + `&page=1`}`,`${STRAVA_CALL_ACTIVITIES + access + `&page=2`}`];
-    const fetchPromises = endpoints.map(endpoint => fetch(endpoint));
-    Promise.all(fetchPromises)
-    .then(responses => Promise.all(responses.map(res => res.json())))
-    .then(allActivities => {
-      let ALL_ACTIVITIES: any[] = [];
-      allActivities.forEach((activityArray) => {
-        ALL_ACTIVITIES = ALL_ACTIVITIES.concat(activityArray);
-      });
-      const runs = ALL_ACTIVITIES.filter(activity => {
-          return activity.type === 'Run';
-      });
-      setRuns([...runs]);
-      setIsLoading(prev => !prev);
-    })
-    .catch(e => console.log(e));
-  }
+  // function getActivities(access: string) {
+  //   const endpoints = [`${STRAVA_CALL_ACTIVITIES + access + `&page=1`}`,`${STRAVA_CALL_ACTIVITIES + access + `&page=2`}`];
+  //   const fetchPromises = endpoints.map(endpoint => fetch(endpoint));
+  //   Promise.all(fetchPromises)
+  //   .then(responses => Promise.all(responses.map(res => res.json())))
+  //   .then(allActivities => {
+  //     let ALL_ACTIVITIES: any[] = [];
+  //     allActivities.forEach((activityArray) => {
+  //       ALL_ACTIVITIES = ALL_ACTIVITIES.concat(activityArray);
+  //     });
+  //     const runs = ALL_ACTIVITIES.filter(activity => {
+  //         return activity.type === 'Run';
+  //     });
+  //     setRuns([...runs]);
+  //     setIsLoading(prev => !prev);
+  //   })
+  //   .catch(e => console.log(e));
+  // }
 
-  function showRuns() {
-    if (isLoading) return <>LOADING</>;
-    if (!isLoading) {
-      console.log();
-      return runs.length;
-    }
-  }
+  // function showRuns() {
+  //   if (isLoading) return <>LOADING</>;
+  //   if (!isLoading) {
+  //     console.log();
+  //     return runs.length;
+  //   }
+  // }
 
   useEffect(() => {
     showTotalDistance();
-  }, [runs]);
+  }, [showTotalDistance]);
 
   function showTotalDistance() {
     if (isLoading) return <>LOADING</>;
@@ -190,17 +190,17 @@ export default function Hero() {
   }
 
   // Animation variants
-  const fadeInUp = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut"
-      }
-    }
-  };
+  // const fadeInUp = {
+  //   hidden: { opacity: 0, y: 20 },
+  //   visible: { 
+  //     opacity: 1, 
+  //     y: 0,
+  //     transition: {
+  //       duration: 0.6,
+  //       ease: "easeOut"
+  //     }
+  //   }
+  // };
 
   const fadeIn = {
     hidden: { opacity: 0 },
@@ -376,6 +376,8 @@ export default function Hero() {
           </div>
           <p className="paragraph smaller">** donațiile active din cele necesare hranei animăluțelor în fiecare lună</p>
         </motion.div>
+        
+        {error && <p className="paragraph smaller">{error}</p>}
       </div>
 
       {/* Hero Image Section - Desktop */}
