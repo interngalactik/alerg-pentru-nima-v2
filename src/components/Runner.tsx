@@ -12,21 +12,21 @@ export default function Runner() {
 
   // Animation variants for the first image (edi-image)
   const image1Variants = {
-    hidden: { opacity: 0, scale: 0.8 }, // Start hidden and smaller
+    hidden: { opacity: 0, scale: 0.8 },
     visible: { 
       opacity: 1, 
       scale: 1, 
-      transition: { duration: 0.6, ease: "easeOut" } // Animate to visible
+      transition: { duration: 0.6, ease: "easeOut" }
     }
   };
 
   // Animation variants for the second image (edi-image _2)
   const image2Variants = {
-    hidden: { opacity: 0, y: -100 }, // Start hidden and above
+    hidden: { opacity: 0, y: -100 },
     visible: { 
       opacity: 1, 
       y: 0, 
-      transition: { delay: 0.2, duration: 0.8, ease: "easeOut" } // Animate to visible
+      transition: { delay: 0.2, duration: 0.8, ease: "easeOut" }
     }
   };
 
@@ -46,12 +46,6 @@ export default function Runner() {
             animate={isInView ? "visible" : "hidden"}
             loading="eager"
             sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
-            onAnimationComplete={() => {
-              if (isInView) {
-                const image = document.querySelector('.edi-image') as HTMLImageElement;
-                if (image) image.style.opacity = '1';
-              }
-            }}
           />
           <motion.img 
             className="edi-image _2"
@@ -64,12 +58,6 @@ export default function Runner() {
             animate={isInView ? "visible" : "hidden"}
             loading="eager"
             sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
-            onAnimationComplete={() => {
-              if (isInView) {
-                const image = document.querySelector('.edi-image') as HTMLImageElement;
-                if (image) image.style.opacity = '1';
-              }
-            }}
           />
         </div>
         <div className="paragraph smaller white">
