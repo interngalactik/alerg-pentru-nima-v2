@@ -226,7 +226,7 @@ export default function Hero() {
 
   return (
     <section className="section hero-section">
-      <div className="container hero" style={{ willChange: 'opacity' }}>
+      <div className="container hero">
         <motion.a 
           href="/" 
           className="logo-wrapper"
@@ -260,6 +260,7 @@ export default function Hero() {
             ease: "easeOut",
             delay: 0.2
           }}
+          style={{ willChange: 'opacity' }}
         >
           <h2 className="heading-small">Alătură-te altor <span className="heading-small-emphasis">{progress.smsCount}</span> persoane</h2>
           <h1 className="heading hero">Susține Sanctuarul Nima</h1>
@@ -316,6 +317,7 @@ export default function Hero() {
             ease: "easeOut",
             delay: 0.4 // Slightly delayed after hero text
           }}
+          style={{ willChange: 'opacity' }}
         >
           <p className="paragraph smaller">KM*</p>
           <div className="progress-graphic_wrapper">
@@ -355,6 +357,7 @@ export default function Hero() {
             ease: "easeOut",
             delay: 0.6 // Further delayed after first progress bar
           }}
+          style={{ willChange: 'opacity' }}
         >
           <p className="paragraph smaller">SMS**</p>
           <div className="progress-graphic_wrapper">
