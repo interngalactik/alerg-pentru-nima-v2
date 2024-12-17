@@ -46,6 +46,12 @@ export default function Runner() {
             animate={isInView ? "visible" : "hidden"}
             loading="eager"
             sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
+            onAnimationComplete={() => {
+              if (isInView) {
+                const image = document.querySelector('.edi-image') as HTMLImageElement;
+                if (image) image.style.opacity = '1';
+              }
+            }}
           />
           <motion.img 
             className="edi-image _2"
@@ -58,6 +64,12 @@ export default function Runner() {
             animate={isInView ? "visible" : "hidden"}
             loading="eager"
             sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
+            onAnimationComplete={() => {
+              if (isInView) {
+                const image = document.querySelector('.edi-image') as HTMLImageElement;
+                if (image) image.style.opacity = '1';
+              }
+            }}
           />
         </div>
         <div className="paragraph smaller white">
