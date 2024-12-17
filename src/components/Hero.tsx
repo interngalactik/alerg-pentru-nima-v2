@@ -226,7 +226,7 @@ export default function Hero() {
 
   return (
     <section className="section hero-section">
-      <div className="container hero">
+      <div className="container hero" style={{ willChange: 'opacity' }}>
         <motion.a 
           href="/" 
           className="logo-wrapper"
