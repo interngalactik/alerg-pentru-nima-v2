@@ -10,6 +10,26 @@ export default function Runner() {
     amount: 0.3 // Trigger when 30% of the element is in view
   })
 
+  // Animation variants for the first image (edi-image)
+  const image1Variants = {
+    hidden: { opacity: 0, scale: 0.8 }, // Start hidden and smaller
+    visible: { 
+      opacity: 1, 
+      scale: 1, 
+      transition: { duration: 0.6, ease: "easeOut" } // Animate to visible
+    }
+  };
+
+  // Animation variants for the second image (edi-image _2)
+  const image2Variants = {
+    hidden: { opacity: 0, y: -100 }, // Start hidden and above
+    visible: { 
+      opacity: 1, 
+      y: 0, 
+      transition: { delay: 0.2, duration: 0.8, ease: "easeOut" } // Animate to visible
+    }
+  };
+
   return (
     <section className="section blue" ref={sectionRef}>
       <div className="container centered">
@@ -21,16 +41,9 @@ export default function Runner() {
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            style={{ opacity: 0, scale: 0.8, willChange: 'opacity' }}
-            animate={{ 
-              opacity: isInView ? 1 : 0,
-              scale: isInView ? 1 : 0.8
-            }}
-            transition={{ 
-              duration: 0.4,
-              ease: "easeOut"
-            }}
-            data-w-id="496f3ce3-0eb5-b2db-57c2-7ae2c9ab4783"
+            variants={image1Variants}
+            initial="hidden"
+            animate={isInView ? "visible" : "hidden"}
             loading="eager"
             sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
           />
@@ -40,21 +53,9 @@ export default function Runner() {
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            style={{ 
-              opacity: 0, 
-              y: -80, // Start 80px up
-              willChange: 'opacity'
-            }}
-            animate={{ 
-              opacity: isInView ? 1 : 0,
-              y: isInView ? 0 : -80 // Slide down to original position
-            }}
-            transition={{ 
-              duration: 0.6,
-              delay: 0.4,
-              ease: "easeOut"
-            }}
-            data-w-id="5706c8c5-5b62-cf07-7dc9-81cbe0889180"
+            variants={image2Variants}
+            initial="hidden"
+            animate={isInView ? "visible" : "hidden"}
             loading="eager"
             sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
           />
