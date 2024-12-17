@@ -67,7 +67,7 @@ a:hover {
 }
 
 .container {
-  max-width: 1520px;
+  max-width: 1520px!important;
   z-index: 2;
   flex-flow: column;
   justify-content: flex-start;
@@ -137,7 +137,7 @@ a:hover {
 
 .heading-small {
   color: #00000080;
-  font-variation-settings: "wght" 732;
+  font-variation-settings: "wght" 432;
   letter-spacing: -.065rem;
   -webkit-text-stroke-color: #0009;
   text-transform: uppercase;
@@ -205,13 +205,13 @@ a:hover {
 
 .paragraph_emphasis {
   color: var(--blue);
-  font-variation-settings: "wght" 500;
+  font-variation-settings: "wght" 900;
   font-size: 1.4rem;
 }
 
 .paragraph_emphasis.orange {
   color: var(--orange);
-  font-variation-settings: "wght" 653;
+  font-variation-settings: "wght" 900;
 }
 
 .paragraph_emphasis.orange.link:hover, .paragraph_emphasis.white {

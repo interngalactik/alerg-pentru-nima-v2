@@ -269,7 +269,7 @@ export default function Hero() {
             <a
                 href="sms:8845?body=NIMA"
                 className="underline paragraph_emphasis"
-              >trimite NIMA la 8845</a> iar eu voi alerga pentru fiecare mesaj în parte.</p>
+              >trimite NIMA prin SMS la 8845</a> iar eu voi alerga pentru fiecare mesaj în parte.</p>
           </div>
           <div className="_15-spacer"></div>
           <a href="#despre" onClick={scrollToAbout} className="button w-button">Vezi detalii</a>

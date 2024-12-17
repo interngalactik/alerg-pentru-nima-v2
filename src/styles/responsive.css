@@ -402,7 +402,6 @@ html, body {
   opacity: .95;
   color: var(--white);
   font-variation-settings: "wght" 251;
-  text-align: justify;
 }
 
 @media screen and (max-width: 991px) {
