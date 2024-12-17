@@ -89,6 +89,12 @@ a:hover {
   justify-content: space-between;
   align-items: stretch;
   display: flex;
+  -webkit-display: flex;
+  -moz-display: flex;
+  -ms-display: flex;
+  -o-display: flex; 
+  height: 100%;
+  width: 100%;
   position: absolute;
   inset: 0% auto 0% 12vw;
 }

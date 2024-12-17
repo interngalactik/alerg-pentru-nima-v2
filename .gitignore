@@ -43,5 +43,7 @@ next-env.d.ts
 # Ignore Firebase debug log
 firebase-debug.log
 
+.firebase/
+
 # Ignore Firebase config
 firebase.json
