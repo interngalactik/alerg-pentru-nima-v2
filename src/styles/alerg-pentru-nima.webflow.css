@@ -90,7 +90,11 @@ a:hover {
   align-items: stretch;
   display: flex;
   position: absolute;
-  inset: 0% auto 0% 0%;
+  inset: 0% auto 0% 12vw;
+}
+
+.hero-white_wrapper img{
+  width: 100%;
 }
 
 .logo-wrapper {

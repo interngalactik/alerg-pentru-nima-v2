@@ -53,6 +53,9 @@ body {
     inset: 0% 0% 0% 7%;
     width: 115%;
   }
+  .hero-white_wrapper {
+    inset: 0% auto 0% 10vw;
+  }
 }
 
 @media screen and (max-width: 1520px) {
