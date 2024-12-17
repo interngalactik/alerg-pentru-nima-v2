@@ -270,6 +270,7 @@ export default function Hero() {
             <a
                 href="sms:8845?body=NIMA"
                 className="underline paragraph_emphasis"
+                style={{ textDecorationColor: 'var(--blue)'}}
               >trimite NIMA prin SMS la 8845</a>, iar eu voi alerga pentru fiecare mesaj în parte.</p>
           </div>
           <div className="_15-spacer"></div>
