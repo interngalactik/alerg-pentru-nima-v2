@@ -50,12 +50,16 @@ a:hover {
 .hero-text_wrapper,
 .progress_wrapper {
   opacity: 0;
-  transition: opacity 0.5s ease-in-out; /* Adjust duration and easing as needed */
+  transition: opacity 0.5s ease-in-out;
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .edi-image {
   opacity: 0; /* Start with opacity 0 */
   transition: opacity 0.5s ease-in-out; /* Smooth transition */
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .fade-in {
@@ -374,6 +378,8 @@ a:hover {
 .edi-image._2 {
   z-index: 2;
   position: absolute;
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .edi-paragraph_wrapper {
