@@ -15,6 +15,10 @@ export default function Footer() {
       <div className="container centered">
         <div className="_60_spacer"></div>
         <div className="footer_links">
+        <a href="https://instagram.com/nistrun" target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginBottom: '10px' }}>
+              <img src="/images/instagram-logo.svg" alt="Instagram" className="instagram-icon" style={{ width: '24px', height: '24px' }} />
+            </a>
+            <br></br>
           <p className="paragraph smaller">
             with ❤️ for <a href="https://sanctuarnima.ro/" target="_blank" rel="noopener noreferrer" className="footer_bold">Sanctuarul Nima</a>
             <br/>
@@ -23,6 +27,7 @@ export default function Footer() {
             developed by <a href="mailto:eduard@nistru.ro" className="footer_bold">Eduard Nistru</a>
             <br/>
             designed &amp; coded by <a href="https://maxanchidin.design/" target="_blank" rel="noopener noreferrer" className="footer_bold">Max Anchidin</a>
+            <br/>
           </p>
         </div>
         <div className="_30-spacer"></div>

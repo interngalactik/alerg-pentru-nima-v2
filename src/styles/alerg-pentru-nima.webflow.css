@@ -447,6 +447,11 @@ a:hover {
   text-align: center;
 }
 
+.instagram-icon {
+  width: 24px;
+  height: 24px;
+}
+
 @media screen and (max-width: 991px) {
   .section.hero-section {
     height: auto;
