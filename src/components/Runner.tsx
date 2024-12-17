@@ -14,7 +14,7 @@ export default function Runner() {
     <section className="section blue" ref={sectionRef}>
       <div className="container centered">
         <div className="_60_spacer"></div>
-        <div className="edi_image-wrapper">
+        <div className="edi_image-wrapper" style={{ willChange: 'opacity' }}>
           <motion.img 
             className="edi-image"
             src="/images/edi_layer1.png"

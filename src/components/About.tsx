@@ -42,7 +42,7 @@ export default function About() {
       <section id="despre" className="section blue-transparent" ref={sectionRef}>
         <div className="container centered">
           <div className="_100-spacer"></div>
-          <div className="despre-campanie_wrapper">
+          <div className="despre-campanie_wrapper" style={{ willChange: 'opacity' }}>
           <motion.div 
             className="despre-campanie_images-wrapper"
             variants={imagesWrapperVariants}
