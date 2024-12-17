@@ -14,14 +14,14 @@ export default function Runner() {
     <section className="section blue" ref={sectionRef}>
       <div className="container centered">
         <div className="_60_spacer"></div>
-        <div className="edi_image-wrapper" style={{ willChange: 'opacity' }}>
+        <div className="edi_image-wrapper">
           <motion.img 
             className="edi-image"
             src="/images/edi_layer1.png"
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            style={{ opacity: 0, scale: 0.8 }}
+            style={{ opacity: 0, scale: 0.8, willChange: 'opacity' }}
             animate={{ 
               opacity: isInView ? 1 : 0,
               scale: isInView ? 1 : 0.8
@@ -42,7 +42,8 @@ export default function Runner() {
             alt="eduard nistru alerg pentru nima sanctuarul nima"
             style={{ 
               opacity: 0, 
-              y: -80 // Start 80px up
+              y: -80, // Start 80px up
+              willChange: 'opacity'
             }}
             animate={{ 
               opacity: isInView ? 1 : 0,

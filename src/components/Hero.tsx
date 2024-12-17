@@ -233,6 +233,7 @@ export default function Hero() {
           initial="hidden"
           animate="visible"
           variants={fadeIn}
+          style={{ willChange: 'opacity' }}
         >
           <Image 
             src="/images/alerg-pentru-nima-logo.svg"
@@ -390,6 +391,7 @@ export default function Hero() {
         initial="hidden"
         animate="visible"
         variants={fadeIn}
+        style={{ willChange: 'opacity' }}
       >
         <Image 
           src="/images/hero-min_1.webp"
