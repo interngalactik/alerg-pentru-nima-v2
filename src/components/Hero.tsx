@@ -274,7 +274,7 @@ export default function Hero() {
                     e.preventDefault(); // Prevent default anchor behavior
                     const smsBody = encodeURIComponent("NIMA"); // Encode the message body
                     const smsNumber = "8845"; // Phone number
-                    window.location.href = `sms:${smsNumber}?body=${smsBody}`; // Construct the sms link
+                    window.location.href = `sms:${smsNumber}&body=${smsBody}`; // Construct the sms link
                 }}
                 className="underline paragraph_emphasis"
                 style={{ textDecorationColor: 'var(--blue)' }}
