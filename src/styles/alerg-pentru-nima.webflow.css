@@ -133,7 +133,7 @@ a:hover {
 
 .heading-small {
   color: #00000080;
-  font-variation-settings: "wght" 432;
+  font-variation-settings: "wght" 732;
   letter-spacing: -.065rem;
   -webkit-text-stroke-color: #0009;
   text-transform: uppercase;
@@ -156,7 +156,7 @@ a:hover {
 
 .paragraph {
   color: #000c;
-  font-variation-settings: "wght" 326;
+  font-variation-settings: "wght" 426;
   font-family: Inter Variablefont Slnt Wght, Arial, sans-serif;
   font-size: 1.375rem;
   line-height: 1.25;
@@ -201,7 +201,7 @@ a:hover {
 
 .paragraph_emphasis {
   color: var(--blue);
-  font-variation-settings: "wght" 900;
+  font-variation-settings: "wght" 500;
   font-size: 1.4rem;
 }
 
@@ -265,7 +265,7 @@ a:hover {
 }
 
 .progress_wrapper {
-  width: 45em;
+  width: 38.5em;
 }
 
 .progress-graphic_wrapper {

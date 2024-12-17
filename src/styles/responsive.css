@@ -67,13 +67,13 @@ body {
 
 @media screen and (max-width: 767px) {
   .section.hero-section {
-    min-height: 100vh;
     padding-top: 2rem;
     padding-bottom: 2rem;
   }
 
   .container.hero {
-    padding: 1em;
+    padding: 0 1em;
+    padding-bottom: 3em;
     display: flex;
     flex-direction: column;
   }
@@ -81,6 +81,10 @@ body {
   .hero-text_wrapper {
     padding: 0;
     order: 2;
+  }
+
+  .hero-paragraph_wrapper {
+    margin-bottom: 10px;
   }
 
   .hero-image_wrapper.mobile {
@@ -114,7 +118,7 @@ body {
   }
 
   ._100-spacer.hero {
-    height: 1.5rem;
+    height: 3em!important;
   }
 
   ._30-spacer {
@@ -122,7 +126,7 @@ body {
   }
 
   ._15-spacer {
-    height: 0.75rem;
+    height: 0.75em;
   }
 
   .heading.hero {
@@ -179,10 +183,6 @@ body {
     left: 0;
     right: 0;
     transform: none;
-  }
-
-  .hero-paragraph_wrapper .paragraph_emphasis {
-    font-variation-settings: "wght" 600;
   }
 
   .container.centered {
@@ -263,7 +263,6 @@ html, body {
   /* Section fixes */
   .section {
     width: 100%;
-    padding: 2rem 0;
     overflow: hidden;
     position: relative;
   }
@@ -277,7 +276,6 @@ html, body {
 
   /* Hero section specific */
   .section.hero-section {
-    min-height: 100vh;
     padding: 0;
   }
 
@@ -288,8 +286,7 @@ html, body {
 
   /* Image handling */
   .hero-image_wrapper.mobile {
-    margin: 1rem -1rem;
-    width: calc(100% + 2rem);
+    margin: 0 -1rem;
   }
 
   .hero-image {
@@ -301,7 +298,6 @@ html, body {
   .section.blue-transparent {
     width: 100%;
     margin: 0;
-    padding: 2rem 0;
   }
 
   .despre-campanie_wrapper {
@@ -318,21 +314,21 @@ html, body {
   }
 
   /* Spacing adjustments */
-  ._100-spacer {
-    height: 3rem;
+  /* ._100-spacer { */
+    /* height: 3em;
   }
 
   ._60-spacer {
-    height: 2rem;
+    height: 2em;
   }
 
   ._30-spacer {
-    height: 1rem;
+    height: 1em;
   }
 
   ._15-spacer {
-    height: 0.75rem;
-  }
+    height: 0.75em;
+  } */
 
   /* Typography */
   .heading {
@@ -347,6 +343,7 @@ html, body {
   /* Progress bars */
   .progress_wrapper {
     width: 100%;
+    padding-bottom: 2.5em;
   }
 
   /* Table adjustments */
