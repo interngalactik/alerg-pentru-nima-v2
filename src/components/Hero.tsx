@@ -269,10 +269,18 @@ export default function Hero() {
           <div className="hero-paragraph_wrapper">
             <p className="paragraph">Donează <span className="paragraph_emphasis">2 euro / lună</span> pentru hrana animalelor salvate de la abator sau exploatare — <></>
             <a
-                href="sms:8845?body=NIMA"
+                href="#"
+                onClick={(e) => {
+                    e.preventDefault(); // Prevent default anchor behavior
+                    const smsBody = encodeURIComponent("NIMA"); // Encode the message body
+                    const smsNumber = "8845"; // Phone number
+                    window.location.href = `sms:${smsNumber}?body=${smsBody}`; // Construct the sms link
+                }}
                 className="underline paragraph_emphasis"
-                style={{ textDecorationColor: 'var(--blue)'}}
-              >trimite NIMA prin SMS la 8845</a>, iar eu voi alerga pentru fiecare mesaj în parte.</p>
+                style={{ textDecorationColor: 'var(--blue)' }}
+              >
+                trimite NIMA prin SMS la 8845
+              </a>, iar eu voi alerga pentru fiecare mesaj în parte.</p>
           </div>
           <div className="_15-spacer"></div>
           <a href="#despre" onClick={scrollToAbout} className="button w-button">Vezi detalii</a>
