@@ -43,7 +43,6 @@ export default function Sponsors() {
 
         <div className="logos_wrapper" style={{ 
           display: 'flex', 
-          gap: '2rem', 
           justifyContent: 'center',
           alignItems: 'center',
           flexWrap: 'wrap'
@@ -91,7 +90,7 @@ export default function Sponsors() {
             }}
           />
         </div>
-        <div className="_100-spacer"></div>
+        <div className="_60_spacer"></div>
       </div>
     </section>
   )
