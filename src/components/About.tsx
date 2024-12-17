@@ -40,8 +40,9 @@ export default function About() {
   return (
     <>
       <section id="despre" className="section blue-transparent" ref={sectionRef}>
-        <div className="container centered despre-campanie_wrapper">
+        <div className="container centered">
           <div className="_100-spacer"></div>
+          <div className="despre-campanie_wrapper">
           <motion.div 
             className="despre-campanie_images-wrapper"
             variants={imagesWrapperVariants}
@@ -116,6 +117,7 @@ export default function About() {
             >
               Termene și condiții
             </motion.button>
+          </div>
           </div>
         </div>
         <div className="_100-spacer"></div>

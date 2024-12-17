@@ -20,7 +20,7 @@ body {
 .hero-image {
   position: relative;
   width: 100%;
-  height: auto;
+  height: 100%;
   object-fit: cover;
   transform: translateX(0);
   position: relative;
@@ -165,15 +165,6 @@ body {
 }
 
 /* Add these styles */
-.section.blue-transparent {
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
-  margin-right: calc(-50vw + 50%);
-  position: relative;
-  left: 50%;
-  right: 50%;
-  transform: translateX(-50%);
-}
 
 @media screen and (max-width: 767px) {
   .section.blue-transparent {
@@ -250,13 +241,6 @@ html, body {
 }
 
 /* Base container styles */
-.container {
-  max-width: 1520px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0 1rem;
-  box-sizing: border-box;
-}
 
 /* Mobile styles */
 @media screen and (max-width: 767px) {
@@ -379,10 +363,8 @@ html, body {
 }
 
 .despre-campanie_images-wrapper {
-  grid-column: 1;
   margin-left: 0;
   position: relative;
-  width: 733px;
 }
 
 .despre-campanie_text-wrapper {
@@ -424,12 +406,7 @@ html, body {
   .despre-campanie_wrapper {
     grid-template-columns: 1fr;
     gap: 4em;
-  }
-
-  .despre-campanie_text-wrapper,
-  .despre-campanie_images-wrapper {
-    grid-column: 1;
-    width: 100%;
+    display: flex;
   }
 }
 
