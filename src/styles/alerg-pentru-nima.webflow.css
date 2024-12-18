@@ -92,11 +92,13 @@ a:hover {
   z-index: 0;
   justify-content: space-between;
   align-items: stretch;
+  -ms-box-orient: horizontal;
+  display: -webkit-box;
+  display: -moz-box;
+  display: -ms-flexbox;
+  display: -moz-flex;
+  display: -webkit-flex;
   display: flex;
-  -webkit-display: flex;
-  -moz-display: flex;
-  -ms-display: flex;
-  -o-display: flex; 
   height: 100%;
   width: 100%;
   position: absolute;

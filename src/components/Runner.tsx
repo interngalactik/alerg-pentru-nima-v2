@@ -10,23 +10,21 @@ export default function Runner() {
     amount: 0.3 // Trigger when 30% of the element is in view
   })
 
-  // Animation variants for the first image (edi-image)
+  // Animation variants for the first image (background layer)
   const image1Variants = {
-    hidden: { opacity: 0, scale: 0.8 },
+    hidden: { opacity: 0 },
     visible: { 
-      opacity: 1, 
-      scale: 1, 
+      opacity: 1,
       transition: { duration: 0.6, ease: "easeOut" }
     }
   };
 
-  // Animation variants for the second image (edi-image _2)
+  // Animation variants for the second image (top layer)
   const image2Variants = {
-    hidden: { opacity: 0, y: -100 },
+    hidden: { opacity: 0 },
     visible: { 
-      opacity: 1, 
-      y: 0, 
-      transition: { delay: 0.2, duration: 0.8, ease: "easeOut" }
+      opacity: 1,
+      transition: { duration: 0.6, delay: 0.3, ease: "easeOut" }
     }
   };
 
@@ -34,7 +32,11 @@ export default function Runner() {
     <section className="section blue" ref={sectionRef}>
       <div className="container centered">
         <div className="_60_spacer"></div>
-        <div className="edi_image-wrapper">
+        <motion.div 
+          className="edi_image-wrapper"
+          initial="hidden"
+          animate={isInView ? "visible" : "hidden"}
+        >
           <motion.img 
             className="edi-image"
             src="/images/edi_layer1.png"
@@ -42,10 +44,8 @@ export default function Runner() {
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
             variants={image1Variants}
-            initial="hidden"
-            animate={isInView ? "visible" : "hidden"}
             loading="eager"
-            sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
+            style={{ willChange: 'opacity' }}
           />
           <motion.img 
             className="edi-image _2"
@@ -54,12 +54,10 @@ export default function Runner() {
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
             variants={image2Variants}
-            initial="hidden"
-            animate={isInView ? "visible" : "hidden"}
             loading="eager"
-            sizes="(max-width: 479px) 242.203125px, (max-width: 767px) 331.015625px, (max-width: 991px) 48vw, 485px"
+            style={{ willChange: 'opacity' }}
           />
-        </div>
+        </motion.div>
         <div className="paragraph smaller white">
           Director executiv <a href="https://naturaumanafilm.ro/" target="_blank" rel="noopener noreferrer" className="paragraph_emphasis white-link">Natura Umană Film</a>
         </div>
