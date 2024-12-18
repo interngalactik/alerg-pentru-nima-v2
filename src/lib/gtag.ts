@@ -56,5 +56,11 @@ export const event = ({ action, params }: { action: string; params: unknown }) =
 };
 
 export const gtag = (type: string, eventName: string, options?: { [key: string]: unknown }) => {
-  // Implementation of gtag function
+  // Example implementation using the parameters
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    event: eventName, // Use eventName to specify the event
+    event_type: type,  // Use type to specify the type of event
+    ...options,        // Spread any additional options
+  });
 };
