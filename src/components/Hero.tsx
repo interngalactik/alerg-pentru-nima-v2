@@ -92,7 +92,7 @@ export default function Hero() {
     const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
 
     return () => clearInterval(intervalId);
-  }, []);
+  }, [fetchSmsCount]);
 
   const sha1 = (str: string) => {
     return CryptoJS.SHA1(str).toString();
@@ -248,7 +248,7 @@ export default function Hero() {
     <section className="section hero-section" ref={sectionRef}>
       <div className="container hero">
         <motion.a 
-          href="/" 
+          href="" 
           className="logo-wrapper"
           style={{ 
             opacity: isInView ? 1 : 0,
