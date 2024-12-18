@@ -210,16 +210,16 @@ export default function Hero() {
   //   }
   // };
 
-  const fadeIn = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut"
-      }
-    }
-  };
+  // const fadeIn = {
+  //   hidden: { opacity: 0 },
+  //   visible: { 
+  //     opacity: 1,
+  //     transition: {
+  //       duration: 0.6,
+  //       ease: "easeOut"
+  //     }
+  //   }
+  // };
 
   const scrollToAbout = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
