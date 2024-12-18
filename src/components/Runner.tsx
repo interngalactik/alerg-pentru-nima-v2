@@ -7,24 +7,15 @@ export default function Runner() {
   const sectionRef = useRef(null)
   const isInView = useInView(sectionRef, { 
     once: true,
-    amount: 0.3 // Trigger when 30% of the element is in view
+    amount: 0.3
   })
 
-  // Animation variants for the first image (background layer)
-  const image1Variants = {
+  // Animation variants for both images
+  const imageVariants = {
     hidden: { opacity: 0 },
     visible: { 
       opacity: 1,
       transition: { duration: 0.6, ease: "easeOut" }
-    }
-  };
-
-  // Animation variants for the second image (top layer)
-  const image2Variants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { duration: 0.6, delay: 0.3, ease: "easeOut" }
     }
   };
 
@@ -34,8 +25,8 @@ export default function Runner() {
         <div className="_60_spacer"></div>
         <motion.div 
           className="edi_image-wrapper"
-          initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
         >
           <motion.img 
             className="edi-image"
@@ -43,9 +34,10 @@ export default function Runner() {
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            variants={image1Variants}
+            initial={{ opacity: 0 }}
+            animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: 0.6 }}
             loading="eager"
-            style={{ willChange: 'opacity' }}
           />
           <motion.img 
             className="edi-image _2"
@@ -53,9 +45,10 @@ export default function Runner() {
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            variants={image2Variants}
+            initial={{ opacity: 0 }}
+            animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
             loading="eager"
-            style={{ willChange: 'opacity' }}
           />
         </motion.div>
         <div className="paragraph smaller white">
