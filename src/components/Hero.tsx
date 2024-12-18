@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { STRAVA_CALL_REFRESH, STRAVA_CALL_ACTIVITIES } from '../lib/constants';
 import CryptoJS from 'crypto-js'; // Importing CryptoJS for SHA1 hashing
+import { useInView } from 'framer-motion';
+import { trackEvent } from '../lib/gtag'
 
 interface StravaActivity {
     type: string;
@@ -23,6 +25,12 @@ export default function Hero() {
   const [runs] = useState<StravaActivity[]>([]);
   const [error, setError] = useState<string | null>(null); // State for error
   const [lastKmRun, setLastKmRun] = useState(0);
+
+  const sectionRef = useRef(null)
+  const isInView = useInView(sectionRef, { 
+    once: true,
+    margin: "-100px"
+  })
 
   // Fetch SMS count function
   const fetchSmsCount = async () => {
@@ -225,15 +233,16 @@ export default function Hero() {
   };
 
   return (
-    <section className="section hero-section">
+    <section className="section hero-section" ref={sectionRef}>
       <div className="container hero">
         <motion.a 
           href="/" 
           className="logo-wrapper"
-          initial="hidden"
-          animate="visible"
-          variants={fadeIn}
-          style={{ willChange: 'opacity' }}
+          style={{ 
+            opacity: isInView ? 1 : 0,
+            transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+            willChange: 'opacity'
+          }}
         >
           <Image 
             src="/images/alerg-pentru-nima-logo.svg"
@@ -248,22 +257,13 @@ export default function Hero() {
         {/* Hero Text Section */}
         <motion.div 
           className="hero-text_wrapper"
-          initial={{ 
-            opacity: 0,
-            x: 100 // Start 100px to the right
+          style={{ 
+            opacity: isInView ? 1 : 0,
+            transform: isInView ? 'translateX(0)' : 'translateX(80px)',
+            transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
-          animate={{ 
-            opacity: 1,
-            x: 0 // Slide to original position
-          }}
-          transition={{ 
-            duration: 0.8,
-            ease: "easeOut",
-            delay: 0.2
-          }}
-          style={{ willChange: 'opacity' }}
         >
-          <h2 className="heading-small">Alătură-te altor <span className="heading-small-emphasis">{progress.smsCount}</span> persoane</h2>
+          <h2 className="heading-small">Alătură-te altor <span className="heading-small-emphasis">1318</span> persoane</h2>
           <h1 className="heading hero">Susține Sanctuarul Nima</h1>
           <div className="_15-spacer"></div>
           <div className="hero-paragraph_wrapper">
@@ -274,6 +274,7 @@ export default function Hero() {
                     e.preventDefault(); // Prevent default anchor behavior
                     const smsBody = encodeURIComponent("NIMA"); // Encode the message body
                     const smsNumber = "8845"; // Phone number
+                    trackEvent.smsClick(); // Track SMS click
                     window.location.href = `sms:${smsNumber}&body=${smsBody}`; // Construct the sms link
                 }}
                 className="underline paragraph_emphasis"
@@ -314,20 +315,11 @@ export default function Hero() {
         {/* Progress Bars */}
         <motion.div 
           className="progress_wrapper"
-          initial={{ 
-            opacity: 0,
-            x: 100 // Start 100px to the right
+          style={{ 
+            opacity: isInView ? 1 : 0,
+            transform: isInView ? 'translateX(0)' : 'translateX(80px)',
+            transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
           }}
-          animate={{ 
-            opacity: 1,
-            x: 0 // Slide to original position
-          }}
-          transition={{ 
-            duration: 0.8,
-            ease: "easeOut",
-            delay: 0.4 // Slightly delayed after hero text
-          }}
-          style={{ willChange: 'opacity' }}
         >
           <p className="paragraph smaller">KM*</p>
           <div className="progress-graphic_wrapper">
@@ -354,20 +346,11 @@ export default function Hero() {
 
         <motion.div 
           className="progress_wrapper"
-          initial={{ 
-            opacity: 0,
-            x: 100 // Start 100px to the right
+          style={{ 
+            opacity: isInView ? 1 : 0,
+            transform: isInView ? 'translateX(0)' : 'translateX(80px)',
+            transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
           }}
-          animate={{ 
-            opacity: 1,
-            x: 0 // Slide to original position
-          }}
-          transition={{ 
-            duration: 0.8,
-            ease: "easeOut",
-            delay: 0.6 // Further delayed after first progress bar
-          }}
-          style={{ willChange: 'opacity' }}
         >
           <p className="paragraph smaller">SMS**</p>
           <div className="progress-graphic_wrapper">
@@ -396,10 +379,10 @@ export default function Hero() {
       {/* Hero Image Section - Desktop */}
       <motion.div 
         className="hero-image_wrapper"
-        initial="hidden"
-        animate="visible"
-        variants={fadeIn}
-        style={{ willChange: 'opacity' }}
+        style={{ 
+          opacity: isInView ? 1 : 0,
+          transition: 'opacity 0.4s ease-out'
+        }}
       >
         <Image 
           src="/images/hero-min_1.webp"

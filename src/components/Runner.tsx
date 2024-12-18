@@ -7,37 +7,26 @@ export default function Runner() {
   const sectionRef = useRef(null)
   const isInView = useInView(sectionRef, { 
     once: true,
-    margin: "-100px",
     amount: 0.3
   })
-
-  // Wrapper animation like About uses
-  const wrapperVariants = {
-    hidden: { opacity: 0, y: 100 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }
-  };
 
   return (
     <section className="section blue" ref={sectionRef}>
       <div className="container centered">
         <div className="_60_spacer"></div>
-        <motion.div 
-          className="edi_image-wrapper"
-          variants={wrapperVariants}
-          initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
-          style={{ willChange: 'opacity' }}
-        >
+        <div className="edi_image-wrapper">
           <motion.img 
             className="edi-image"
             src="/images/edi_layer1.png"
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
             loading="eager"
+            style={{ 
+              opacity: isInView ? 1 : 0,
+              scale: isInView ? 1 : 0.6,
+              transition: 'opacity 0.6s ease-out, transform 0.6s ease-out'
+            }}
           />
           <motion.img 
             className="edi-image _2"
@@ -45,12 +34,14 @@ export default function Runner() {
             width={485}
             height={485}
             alt="eduard nistru alerg pentru nima sanctuarul nima"
-            initial={{ opacity: 0, y: -100 }}
-            animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: -100 }}
-            transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
             loading="eager"
+            style={{ 
+              opacity: isInView ? 1 : 0,
+              transform: isInView ? 'translateY(0)' : 'translateY(-100px)',
+              transition: 'opacity 0.6s ease-out 0.4s, transform 0.6s ease-out 0.4s'
+            }}
           />
-        </motion.div>
+        </div>
         <div className="paragraph smaller white">
           Director executiv <a href="https://naturaumanafilm.ro/" target="_blank" rel="noopener noreferrer" className="paragraph_emphasis white-link">Natura Umană Film</a>
         </div>

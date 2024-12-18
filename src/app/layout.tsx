@@ -1,25 +1,36 @@
-import type { Metadata } from 'next'
+'use client'
+
 import './globals.css'
 import ScrollToTop from '@/components/ScrollToTop'
-
-export const metadata: Metadata = {
-  title: 'Alerg pentru Nima — Susține Sanctuarul Nima',
-  description: 'Donează 2 euro / lună pentru hrana animalelor salvate de la abator sau exploatare — trimite NIMA prin SMS la 8845 iar eu voi alerga pentru fiecare mesaj în parte.',
-  openGraph: {
-    title: 'Alerg pentru Nima — Susține Sanctuarul Nima',
-    description: 'Donează 2 euro / lună pentru hrana animalelor salvate de la abator sau exploatare — trimite NIMA prin SMS la 8845 iar eu voi alerga pentru fiecare mesaj în parte.',
-    images: ['https://cdn.prod.website-files.com/675317edeb0cced92990c7d7/675b4db70569c8b35d0e9718_OPEN%20GRAPH.jpg'],
-  },
-  icons: {
-    icon: '/images/favicon.png',
-  },
-}
+import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
+import { pageview, trackEvent } from '../lib/gtag'
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (pathname) {
+      pageview(pathname)
+    }
+
+    // Track scroll depth
+    const handleScroll = () => {
+      const scrolled = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight)
+      if (scrolled >= 0.25) trackEvent.scrollDepth('25%')
+      if (scrolled >= 0.50) trackEvent.scrollDepth('50%')
+      if (scrolled >= 0.75) trackEvent.scrollDepth('75%')
+      if (scrolled >= 0.90) trackEvent.scrollDepth('90%')
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [pathname])
+
   return (
     <html lang="ro">
       <body>
