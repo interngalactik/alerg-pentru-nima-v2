@@ -37,8 +37,8 @@ export default function ScrollToTop() {
           exit={{ opacity: 0, y: 20 }}
           style={{
             position: 'fixed',
-            bottom: '1.5rem',
-            right: '1.5rem',
+            bottom: '1rem',
+            right: '1rem',
             backgroundColor: 'var(--blue)',
             color: 'white',
             width: '3rem',
