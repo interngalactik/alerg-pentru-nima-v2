@@ -5,7 +5,6 @@ export default function Document() {
   return (
     <Html lang="ro">
       <Head>
-        {/* Global Site Tag (gtag.js) - Google Analytics */}
         <script
           async
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
@@ -16,7 +15,11 @@ export default function Document() {
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', '${GA_MEASUREMENT_ID}');
+              gtag('config', '${GA_MEASUREMENT_ID}', {
+                page_location: window.location.href,
+                page_path: window.location.pathname,
+                page_title: document.title
+              });
             `,
           }}
         />
