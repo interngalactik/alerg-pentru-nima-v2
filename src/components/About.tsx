@@ -115,7 +115,7 @@ export default function About() {
               animate={isInView ? "visible" : "hidden"}
               transition={{ delay: 0.2 }}
             >
-              <a href="https://sanctuarnima.ro/" style={{textDecoration: "underline", textDecorationColor: "var(--orange)"}} target="_blank">
+              <a href="https://sanctuarnima.ro" style={{textDecoration: "underline", textDecorationColor: "var(--orange)"}} target="_blank">
                 <span className="paragraph_emphasis orange link">Sanctuarul Nima</span>
               </a> este primul sanctuar din România destinat animalelor de fermă, înfiinţat în anul 2018 de către Fundaţia Siddhartha, unde peste 140 de animale salvate își trăiesc viețile în pace și armonie. Începând cu ianuarie 2021, Sanctuarul Nima este susținut exclusiv prin atragerea de fonduri din comunitate. <br/><br/>
               Într-o lume in care animalele de fermă sunt obiectivizate, exploatate și omorâte cu mult înainte de vreme, existența unui sanctuar destinat lor poate fi susținută doar printr-un efort colectiv măcar în ceea ce privește nevoile primare de subzistență: <span className="paragraph_emphasis orange">hrana</span>. Sanctuarul are nevoie de <span className="paragraph_emphasis orange">implicarea noastră</span> pentru a oferi în continuare o viaţă fericită animalelor salvate de la abator sau exploatare. <span className="paragraph_emphasis orange">Fiecare SMS</span> asigură o jumătate de balot de fân din cele câteva mii care se consumă în sanctuar lunar.
