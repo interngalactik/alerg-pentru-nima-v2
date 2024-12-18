@@ -263,7 +263,7 @@ export default function Hero() {
             transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
           }}
         >
-          <h2 className="heading-small">Alătură-te altor <span className="heading-small-emphasis">1318</span> persoane</h2>
+          <h2 className="heading-small">Alătură-te altor <span className="heading-small-emphasis">{progress.smsCount}</span> persoane</h2>
           <h1 className="heading hero">Susține Sanctuarul Nima</h1>
           <div className="_15-spacer"></div>
           <div className="hero-paragraph_wrapper">
