@@ -137,8 +137,8 @@ const RacesTable = () => {
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Diferența de nivel (m)</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="left">Status</TableCell>
               <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Timp</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">General</TableCell>
-              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Categorie de vârstă</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Loc General</TableCell>
+              <TableCell style={{ fontWeight: 'bold', backgroundColor: 'white', color: 'var(--blue)' }} align="right">Loc categorie de vârstă</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

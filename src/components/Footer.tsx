@@ -16,9 +16,12 @@ export default function Footer() {
       <div className="container centered">
         <div className="_60_spacer"></div>
         <div className="footer_links">
-        <a href="https://instagram.com/nistrun" onClick={() => trackEvent.externalLinkClick('https://instagram.com/nistrun')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginBottom: '10px' }}>
-              <img src="/images/instagram-logo.svg" alt="Instagram" className="instagram-icon" style={{ width: '24px', height: '24px' }} />
-            </a>
+          <a href="https://instagram.com/nistrun" onClick={() => trackEvent.externalLinkClick('https://instagram.com/nistrun')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginBottom: '10px', marginRight: '10px' }}>
+            <img src="/images/instagram-logo.svg" alt="Instagram" className="instagram-icon" style={{ width: '24px', height: '24px' }} />
+          </a>
+          <a href="https://www.strava.com/athletes/14970588" onClick={() => trackEvent.externalLinkClick('https://www.strava.com/athletes/14970588')} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginBottom: '10px' }}>
+            <img src="/images/strava-logo.svg" alt="Strava" className="strava-icon" style={{ width: '24px', height: '24px' }} />
+          </a>
             <br></br>
           <p className="paragraph smaller">
             with ❤️ for <a href="https://sanctuarnima.ro/" onClick={() => trackEvent.externalLinkClick('https://sanctuarnima.ro/')} target="_blank" rel="noopener noreferrer" className="footer_bold">Sanctuarul Nima</a>
