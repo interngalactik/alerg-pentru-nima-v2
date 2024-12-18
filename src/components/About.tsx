@@ -60,6 +60,7 @@ export default function About() {
               loading="eager"
               sizes="(max-width: 479px) 97vw, (max-width: 767px) 468.265625px, (max-width: 991px) 60vw, 44vw"
               srcSet="/images/nima_layer1_1nima_layer1.webp 500w, /images/nima_layer1_1nima_layer1.webp 800w, /images/nima_layer1_1nima_layer1.webp 1080w, /images/nima_layer1_1.webp 1466w"
+              style={{ willChange: 'transform' }}
             />
             <motion.img 
               className="despre-campanie_image _2"
