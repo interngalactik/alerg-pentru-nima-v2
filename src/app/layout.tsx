@@ -33,6 +33,9 @@ export default function RootLayout({
 
   return (
     <html lang="ro">
+      <head>
+        <link rel="icon" href="/images/favicon.png" sizes="any" />
+      </head>
       <body>
         {children}
         <ScrollToTop />
