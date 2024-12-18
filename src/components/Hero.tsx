@@ -271,11 +271,18 @@ export default function Hero() {
             <a
                 href="#"
                 onClick={(e) => {
-                    e.preventDefault(); // Prevent default anchor behavior
-                    const smsBody = encodeURIComponent("NIMA"); // Encode the message body
-                    const smsNumber = "8845"; // Phone number
-                    trackEvent.smsClick(); // Track SMS click
-                    window.location.href = `sms:${smsNumber}&body=${smsBody}`; // Construct the sms link
+                    e.preventDefault();
+                    const smsBody = "NIMA";
+                    const smsNumber = "8845";
+                    trackEvent.smsClick();
+                    
+                    // Check if it's Android
+                    const isAndroid = /android/i.test(navigator.userAgent);
+                    const smsLink = isAndroid 
+                      ? `sms:${smsNumber}?body=${smsBody}`  // Android format
+                      : `sms://${smsNumber}&body=${encodeURIComponent(smsBody)}`; // iOS format
+                    
+                    window.location.href = smsLink;
                 }}
                 className="underline paragraph_emphasis"
                 style={{ textDecorationColor: 'var(--blue)' }}
