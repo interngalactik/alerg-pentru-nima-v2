@@ -20,6 +20,17 @@ export default function About() {
     }
   };
 
+  const scrollToTerms = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    const termsSection = document.querySelector('#termene');
+    if (termsSection) {
+      termsSection.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
   // Animation variants for the images wrapper
   const imagesWrapperVariants = {
     hidden: { opacity: 0, y: 100 }, // Start hidden and above
@@ -111,6 +122,7 @@ export default function About() {
             </motion.p>
             <div className="_30-spacer"></div>
             <motion.button 
+              onClick={scrollToTerms}
               variants={buttonVariants}
               initial="hidden"
               animate={isInView ? "visible" : "hidden"}

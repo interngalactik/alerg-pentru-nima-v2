@@ -27,9 +27,9 @@ export default function Sponsors() {
             Deții sau cunoști o firmă care vrea să suțină animăluțele <span className="paragraph_emphasis">Sanctuarului Nima</span>? Scrie-mi aici:
           </p>
         </div>
-        <div className="_30-spacer"></div>
-        <a href="mailto:eduard@nistru.ro" className="email">eduard@nistru.ro</a>
         <div className="_15-spacer"></div>
+        <a href="mailto:eduard@nistru.ro" className="email">eduard@nistru.ro</a>
+        <div className="_30-spacer"></div>
         
         <Image 
           src="/images/tshirt_logo_1.webp"
