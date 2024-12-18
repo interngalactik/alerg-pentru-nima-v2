@@ -240,6 +240,10 @@ body {
   .logo_placeholder {
     width: 11em!important;
    }
+
+   .calendar_heading {
+    font-size: 3em;
+   }
 }
 
 /* Global mobile fixes */

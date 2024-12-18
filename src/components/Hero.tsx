@@ -32,25 +32,39 @@ export default function Hero() {
     margin: "-100px"
   })
 
-  // Fetch SMS count function
+  // Add this helper function at the top
+  const fetchWithRetry = async (url: string, options: RequestInit, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return response;
+      } catch (error) {
+        if (i === retries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
+    throw new Error('Failed to fetch after retries');
+  };
+
+  // Update the fetchSmsCount function
   const fetchSmsCount = async () => {
-    const authId = "675";
-    const authKey = "8a0e3a142a901c2b9c90c94e40118d07";
-    const apiUrl = `https://sms-2w-api.syscomdigital.ro/stats/total-donatori/${authId}`;
-    const ts = new Date().toISOString().slice(0, 19).replace('T', ' '); // Current timestamp
-    const startDate = new Date('2022-03-15');
-    const fromDate = startDate.toISOString().slice(0, 10); // Format: YYYY-MM-DD
-
-    const authorization = sha1(`${authKey}&${ts}`);
-
-    const data = new URLSearchParams({
-      authorization: authorization,
-      ts: ts,
-      'from-date': fromDate,
-    });
-
     try {
-      const response = await fetch(apiUrl, {
+      const authId = "675";
+      const authKey = "8a0e3a142a901c2b9c90c94e40118d07";
+      const apiUrl = `https://sms-2w-api.syscomdigital.ro/stats/total-donatori/${authId}`;
+      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const startDate = new Date('2022-03-15');
+      const fromDate = startDate.toISOString().slice(0, 10);
+
+      const authorization = sha1(`${authKey}&${ts}`);
+      const data = new URLSearchParams({
+        authorization: authorization,
+        ts: ts,
+        'from-date': fromDate,
+      });
+
+      const response = await fetchWithRetry(apiUrl, {
         method: 'POST',
         body: data,
         headers: {
@@ -58,29 +72,27 @@ export default function Hero() {
         },
       });
 
-      if (response.ok) {
-        const responseData = await response.text();
-        const arr = responseData.split('"');
-        const sms = arr[3]; // Extract the desired value
-        setProgress(prev => ({ ...prev, smsCount: parseInt(sms) })); // Update smsCount
-      } else {
-        setError(`Error: ${response.status}`);
-      }
+      const responseData = await response.text();
+      const arr = responseData.split('"');
+      const sms = arr[3];
+      setProgress(prev => ({ ...prev, smsCount: parseInt(sms) }));
+      setError(null); // Clear any previous errors
     } catch (err) {
-      if (err instanceof Error) {
-        setError(`Fetch error: ${err.message}`);
-      } else {
-        setError('Fetch error: Unknown error occurred');
+      console.error('Fetch error:', err);
+      // Don't update UI for temporary errors
+      if (progress.smsCount === 0) {
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
       }
     }
   };
 
+  // Update the interval timing
   useEffect(() => {
     fetchSmsCount(); // Call fetch function on component mount
     const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
 
-    return () => clearInterval(intervalId); // Cleanup on unmount
-  }, [fetchSmsCount]);
+    return () => clearInterval(intervalId);
+  }, []);
 
   const sha1 = (str: string) => {
     return CryptoJS.SHA1(str).toString();
