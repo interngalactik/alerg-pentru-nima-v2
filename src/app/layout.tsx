@@ -5,6 +5,7 @@ import ScrollToTop from '@/components/ScrollToTop'
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { pageview, trackEvent } from '../lib/gtag'
+import { useLenis } from '@/hooks/useLenis'
 
 export default function RootLayout({
   children,
@@ -12,6 +13,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  useLenis()
 
   useEffect(() => {
     if (pathname) {

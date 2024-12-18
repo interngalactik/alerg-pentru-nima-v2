@@ -14,6 +14,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.2.0",
     "@mui/material": "^6.2.0",
+    "@studio-freight/lenis": "^1.0.42",
     "crypto-js": "^4.2.0",
     "framer-motion": "^11.14.4",
     "next": "15.1.0",
