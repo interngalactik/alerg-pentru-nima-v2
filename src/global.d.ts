@@ -1,7 +1,11 @@
 // src/global.d.ts
 declare global {
     interface Window {
-      gtag: (...args: unknown[]) => void; // Changed from any[] to unknown[]
+      gtag: (
+        type: string,
+        eventName: string,
+        options?: { [key: string]: any }
+      ) => void;
     }
   }
   

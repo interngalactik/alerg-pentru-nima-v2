@@ -8,18 +8,21 @@ export default function Document() {
         <script
           async
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          onError={() => console.error('Failed to load GA script')}
+          onLoad={() => console.log('GA script loaded successfully')}
         />
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${GA_MEASUREMENT_ID}', {
-                page_location: window.location.href,
-                page_path: window.location.pathname,
-                page_title: document.title
-              });
+              try {
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${GA_MEASUREMENT_ID}');
+                console.log('GA script initialized');
+              } catch (error) {
+                console.error('GA initialization error:', error);
+              }
             `,
           }}
         />
