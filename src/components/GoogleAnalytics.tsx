@@ -25,9 +25,9 @@ export default function GoogleAnalytics() {
   const handleInitialize = () => {
     // console.log('📊 GA: Initializing...');
     window.dataLayer = window.dataLayer || [];
-    window.gtag = function() {
-      window.dataLayer.push(arguments);
-      // console.log('📊 GA: Event tracked:', ...arguments); // Comment out for production
+    window.gtag = (...args: unknown[]) => {
+      window.dataLayer.push(args);
+    //   console.log('📊 GA: Event tracked:', ...args);
     };
     window.gtag('js', new Date());
     const isProduction = process.env.NODE_ENV === 'production';

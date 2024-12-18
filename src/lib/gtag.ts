@@ -50,7 +50,11 @@ export const trackEvent = {
 };
 
 // Generic event function
-export const event = ({ action, params }: { action: string; params: any }) => {
+export const event = ({ action, params }: { action: string; params: unknown }) => {
 //   console.log('📊 GA Lib: Tracking custom event:', action, params);
   window.gtag('event', action, params);
+};
+
+export const gtag = (type: string, eventName: string, options?: { [key: string]: unknown }) => {
+  // Implementation of gtag function
 };

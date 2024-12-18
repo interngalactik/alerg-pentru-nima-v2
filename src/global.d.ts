@@ -4,7 +4,7 @@ declare global {
       gtag: (
         type: string,
         eventName: string,
-        options?: { [key: string]: any }
+        options?: { [key: string]: unknown }
       ) => void;
     }
   }
