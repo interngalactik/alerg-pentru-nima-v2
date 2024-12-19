@@ -29,6 +29,8 @@ const GoogleAnalytics = () => {
     window.gtag('js', new Date());
     const isProduction = process.env.NODE_ENV === 'production';
 
+    console.log('Is Production:', isProduction);
+
     if (isProduction) {
       window.gtag('config', GA_MEASUREMENT_ID, {
         send_page_view: true,
