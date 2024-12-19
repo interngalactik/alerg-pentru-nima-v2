@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { trackEvent } from '../lib/gtag'
+import { trackEvent } from '@/lib/gtag'
 import Image from 'next/image'
 
 export default function Footer() {
