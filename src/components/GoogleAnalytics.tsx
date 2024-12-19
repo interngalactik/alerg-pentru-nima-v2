@@ -13,6 +13,7 @@ const GoogleAnalytics = () => {
   // Handle route changes
   useEffect(() => {
     if (isInitialized && pathname && window.gtag) {
+      console.log('Sending page view event to Google Analytics');
       window.gtag('event', 'page_view', {
         page_location: window.location.href || null,
         page_path: pathname || null,
@@ -22,6 +23,7 @@ const GoogleAnalytics = () => {
   }, [pathname, searchParams, isInitialized]);
 
   const handleInitialize = () => {
+    console.log('Initializing Google Analytics');
     window.dataLayer = window.dataLayer || [];
     window.gtag = (...args: unknown[]) => {
       window.dataLayer.push(args);
@@ -29,14 +31,13 @@ const GoogleAnalytics = () => {
     window.gtag('js', new Date());
     const isProduction = process.env.NODE_ENV === 'production';
 
-    console.log('Is Production:', isProduction);
-
     if (isProduction) {
       window.gtag('config', GA_MEASUREMENT_ID, {
         send_page_view: true,
         cookie_domain: 'auto',
         cookie_flags: 'SameSite=None;Secure',
       });
+      console.log('Google Analytics configured with ID:', GA_MEASUREMENT_ID);
     }
     setIsInitialized(true);
   };
