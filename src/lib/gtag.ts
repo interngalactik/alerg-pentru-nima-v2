@@ -64,3 +64,15 @@ export const gtag = (type: string, eventName: string, options?: { [key: string]:
     ...options,        // Spread any additional options
   });
 };
+
+// Google Analytics initialization
+window.dataLayer = window.dataLayer || [];
+window.gtag = function() {
+  window.dataLayer.push(arguments);
+};
+window.gtag('js', new Date());
+window.gtag('config', GA_MEASUREMENT_ID, {
+  send_page_view: true,
+  cookie_domain: 'auto',
+  cookie_flags: 'SameSite=None;Secure',
+});
