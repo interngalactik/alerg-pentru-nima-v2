@@ -2,7 +2,7 @@
 
 import './globals.css'
 import ScrollToTop from '@/components/ScrollToTop'
-import GoogleAnalytics from '@/components/GoogleAnalytics'
+import GoogleAnalyticsWrapper from '@/components/GoogleAnalytics'
 
 export default function RootLayout({
   children,
@@ -15,7 +15,7 @@ export default function RootLayout({
         <link rel="icon" href="/images/favicon.png" sizes="any" />
       </head>
       <body>
-        <GoogleAnalytics />
+        <GoogleAnalyticsWrapper />
         {children}
         <ScrollToTop />
       </body>

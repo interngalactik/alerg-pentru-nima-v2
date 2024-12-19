@@ -48,51 +48,50 @@ export default function Hero() {
   };
 
   // Update the fetchSmsCount function
-  const fetchSmsCount = async () => {
-    try {
-      const authId = "675";
-      const authKey = "8a0e3a142a901c2b9c90c94e40118d07";
-      const apiUrl = `https://sms-2w-api.syscomdigital.ro/stats/total-donatori/${authId}`;
-      const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      const startDate = new Date('2022-03-15');
-      const fromDate = startDate.toISOString().slice(0, 10);
-
-      const authorization = sha1(`${authKey}&${ts}`);
-      const data = new URLSearchParams({
-        authorization: authorization,
-        ts: ts,
-        'from-date': fromDate,
-      });
-
-      const response = await fetchWithRetry(apiUrl, {
-        method: 'POST',
-        body: data,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
-
-      const responseData = await response.text();
-      const arr = responseData.split('"');
-      const sms = arr[3];
-      setProgress(prev => ({ ...prev, smsCount: parseInt(sms) }));
-      setError(null); // Clear any previous errors
-    } catch (err) {
-      console.error('Fetch error:', err);
-      // Don't update UI for temporary errors
-      if (progress.smsCount === 0) {
-        setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      }
-    }
-  };
-
-  // Update the interval timing
   useEffect(() => {
+    const fetchSmsCount = async () => {
+      try {
+        const authId = "675";
+        const authKey = "8a0e3a142a901c2b9c90c94e40118d07";
+        const apiUrl = `https://sms-2w-api.syscomdigital.ro/stats/total-donatori/${authId}`;
+        const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const startDate = new Date('2022-03-15');
+        const fromDate = startDate.toISOString().slice(0, 10);
+
+        const authorization = sha1(`${authKey}&${ts}`);
+        const data = new URLSearchParams({
+          authorization: authorization,
+          ts: ts,
+          'from-date': fromDate,
+        });
+
+        const response = await fetchWithRetry(apiUrl, {
+          method: 'POST',
+          body: data,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        });
+
+        const responseData = await response.text();
+        const arr = responseData.split('"');
+        const sms = arr[3];
+        setProgress(prev => ({ ...prev, smsCount: parseInt(sms) }));
+        setError(null); // Clear any previous errors
+      } catch (err) {
+        console.error('Fetch error:', err);
+        // Don't update UI for temporary errors
+        if (progress.smsCount === 0) {
+          setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        }
+      }
+    };
+
     fetchSmsCount(); // Call fetch function on component mount
     const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
 
     return () => clearInterval(intervalId);
-  }, [fetchSmsCount]);
+  }, [progress.smsCount]);
 
   const sha1 = (str: string) => {
     return CryptoJS.SHA1(str).toString();
