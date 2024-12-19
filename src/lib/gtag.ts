@@ -67,8 +67,8 @@ export const gtag = (type: string, eventName: string, options?: { [key: string]:
 
 // Google Analytics initialization
 window.dataLayer = window.dataLayer || [];
-window.gtag = function() {
-  window.dataLayer.push(arguments);
+window.gtag = (...args: unknown[]) => {
+  window.dataLayer.push(...args);
 };
 window.gtag('js', new Date());
 window.gtag('config', GA_MEASUREMENT_ID, {
