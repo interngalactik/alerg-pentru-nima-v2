@@ -120,7 +120,8 @@ export default function Hero() {
       // Get activities with new token
       const endpoints = [
         `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=1'}`,
-        `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=2'}`
+        `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=2'}`,
+        `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=3'}`
       ];
       
       const responses = await Promise.all(endpoints.map(endpoint => fetch(endpoint)));
@@ -134,6 +135,8 @@ export default function Hero() {
       const runs = ALL_ACTIVITIES.filter(activity => activity.type === 'Run');
       const totalDistanceMeters = runs.reduce((acc, run) => acc + run.distance, 0);
       const totalDistanceKm = Math.round(totalDistanceMeters * 100 / 1000) / 100;
+
+      // console.log('RUNS', runs)
 
       // Update only if there's a change
       if (totalDistanceKm !== lastKmRun) {

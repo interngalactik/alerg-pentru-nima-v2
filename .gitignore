@@ -47,3 +47,7 @@ firebase-debug.log
 
 # Ignore Firebase config
 firebase.json
+
+# macOS system files
+.DS_Store
+._*
