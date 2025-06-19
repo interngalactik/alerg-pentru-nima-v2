@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Papa from 'papaparse';
 import {
   Table,
@@ -49,7 +49,7 @@ const RacesTable = () => {
   const [spreadsheetId] = useState('2PACX-1vSHYqZ9S0Q9pbMy97P1rYquyNr9897G6LsV_YP4_bBRxyoX-3hOspdM-iR0Z7Nf15JByZhvLwDwTMES');
   const [sheetId, setSheetId] = useState(getInitialSheetId());
 
-  const fetchData = async (sheetId: string) => {
+  const fetchData = useCallback(async (sheetId: string) => {
     setLoading(true); // Start loading
     try {
       const response = await fetch(`https://docs.google.com/spreadsheets/d/e/${spreadsheetId}/pub?output=csv&gid=${sheetId}`); // Replace with your actual Sheet ID
@@ -75,11 +75,11 @@ const RacesTable = () => {
     } finally {
       setLoading(false); // Stop loading
     }
-  };
+  }, [spreadsheetId]);
 
   useEffect(() => {
     fetchData(sheetId); // Fetch data for the selected year
-  }, [sheetId]); // Fetch data whenever the selected year changes
+  }, [sheetId, fetchData]); // Fetch data whenever the selected year changes
 
   const handleYearChange = (sheetId: string) => {
     setSheetId(sheetId); // Update the selected year

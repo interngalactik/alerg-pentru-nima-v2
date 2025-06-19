@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "prebuild": "find ./src/components -name '._*' -type f -delete",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
