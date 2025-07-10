@@ -307,7 +307,12 @@ export default function Hero() {
               </a>, iar eu voi alerga pentru fiecare mesaj în parte.</p>
           </div>
           <div className="_15-spacer"></div>
-          <a href="#despre" onClick={scrollToAbout} className="button w-button">Vezi detalii</a>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <a href="#despre" onClick={scrollToAbout} className="button w-button">Vezi detalii</a>
+            <a href="/via-transilvanica" className="button w-button" style={{ backgroundColor: '#EF7D00', color: 'white', border: 'none' }}>
+              Via Transilvanica
+            </a>
+          </div>
           <div className="_30-spacer"></div>
         </motion.div>
 
