@@ -17,7 +17,7 @@ export default function Home() {
         <Runner />
         <Calendar />
         <Terms />
-        <Footer />  
+        <Footer />
       </Suspense>
     </main>
   )

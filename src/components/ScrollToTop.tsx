@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePathname } from 'next/navigation'
 
 export default function ScrollToTop() {
   const [isVisible, setIsVisible] = useState(false)
+  const pathname = usePathname()
+  const isViaTransilvanicaPage = pathname === '/via-transilvanica'
 
   useEffect(() => {
     const toggleVisibility = () => {
@@ -24,6 +27,11 @@ export default function ScrollToTop() {
       top: 0,
       behavior: 'smooth'
     })
+  }
+
+  // Don't render on Via Transilvanica page
+  if (isViaTransilvanicaPage) {
+    return null
   }
 
   return (
