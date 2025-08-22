@@ -2,9 +2,15 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Box, Typography, Paper, Button } from '@mui/material';
-import { LocationOn } from '@mui/icons-material';
+import { LocationOn, Add as AddIcon } from '@mui/icons-material';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import { parseGPX, ParsedGPX, GPXTrack } from '@/lib/gpxParser';
+import { Waypoint, WaypointFormData } from '../../types/waypoint';
+import { WaypointService } from '../../lib/waypointService';
+import { AdminAuthService } from '../../lib/adminAuthService';
+import WaypointMarker from './WaypointMarker';
+import WaypointForm from './WaypointForm';
+import WaypointDisplay from './WaypointDisplay';
 
 interface TrailMapProps {
   currentLocation: { lat: number; lng: number };
@@ -20,6 +26,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [uploadedTracks, setUploadedTracks] = useState<GPXTrack[]>([]);
   const [gpxLoading, setGpxLoading] = useState(false);
   const [gpxError, setGpxError] = useState<string | null>(null);
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [selectedWaypoint, setSelectedWaypoint] = useState<Waypoint | null>(null);
+  const [showWaypointForm, setShowWaypointForm] = useState(false);
+  const [editingWaypoint, setEditingWaypoint] = useState<Waypoint | null>(null);
+  const [formCoordinates, setFormCoordinates] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
+  const [isAdmin, setIsAdmin] = useState(false);
   const mapRef = useRef<any>(null);
 
   // Get all route points from GPX tracks
@@ -44,6 +56,91 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       onStartPointChange(startPoint);
     }
   }, [startPoint, onStartPointChange]);
+
+  // Load waypoints on component mount
+  useEffect(() => {
+    const loadWaypoints = async () => {
+      try {
+        console.log('Loading waypoints...');
+        const waypointsData = await WaypointService.getAllWaypoints();
+        console.log('Waypoints loaded:', waypointsData);
+        setWaypoints(waypointsData);
+      } catch (error) {
+        console.error('Error loading waypoints:', error);
+      }
+    };
+
+    loadWaypoints();
+
+    // Subscribe to waypoint changes
+    const unsubscribe = WaypointService.subscribeToWaypoints((waypointsData) => {
+      console.log('Waypoints updated via subscription:', waypointsData);
+      setWaypoints(waypointsData);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Check admin status using the authentication service
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      const isAdminUser = await AdminAuthService.isAdminLoggedIn();
+      setIsAdmin(isAdminUser);
+    };
+    
+    // Check initial status
+    checkAdminStatus();
+    
+    // Set up interval to check admin status periodically
+    const interval = setInterval(checkAdminStatus, 30000); // Check every 30 seconds
+    
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Waypoint management functions
+  const handleWaypointClick = (waypoint: Waypoint) => {
+    setSelectedWaypoint(waypoint);
+  };
+
+  const handleAddWaypoint = (data: WaypointFormData) => {
+    console.log('handleAddWaypoint called with:', data);
+    setEditingWaypoint(null);
+    setShowWaypointForm(true);
+    // Store the coordinates for the form
+    setFormCoordinates(data.coordinates);
+    console.log('Form coordinates set to:', data.coordinates);
+  };
+
+  const handleWaypointSubmit = async (data: WaypointFormData) => {
+    try {
+      if (editingWaypoint) {
+        await WaypointService.updateWaypoint(editingWaypoint.id, data);
+      } else {
+        await WaypointService.addWaypoint(data);
+      }
+      setShowWaypointForm(false);
+      setEditingWaypoint(null);
+    } catch (error) {
+      console.error('Error saving waypoint:', error);
+    }
+  };
+
+  const handleWaypointEdit = (waypoint: Waypoint) => {
+    setEditingWaypoint(waypoint);
+    setShowWaypointForm(true);
+    setSelectedWaypoint(null);
+  };
+
+  const handleWaypointDelete = async (waypointId: string) => {
+    try {
+      await WaypointService.deleteWaypoint(waypointId);
+      setSelectedWaypoint(null);
+    } catch (error) {
+      console.error('Error deleting waypoint:', error);
+    }
+  };
 
   // Initialize client-side rendering and load GPX data
   useEffect(() => {
@@ -173,6 +270,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             Fit Route
           </Button>
         )}
+
       </Box>
 
       {/* Progress overlay */}
@@ -215,6 +313,8 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         )}
       </Box>
 
+
+
       {/* Map Container */}
       <MapContainer
         center={[currentLocation.lat, currentLocation.lng]}
@@ -228,23 +328,53 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         />
 
         {/* Uploaded GPX tracks */}
-        {uploadedTracks.map((track, index) => (
+        {uploadedTracks.map((track, trackIndex) => (
           <Polyline
-            key={`track-${index}`}
+            key={`track-${trackIndex}`}
             positions={track.points}
             color="#ff6b35"
-            weight={3}
+            weight={isAdmin ? 4 : 3}
             opacity={0.8}
-          >
-            <Popup>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                {track.name || `Track ${index + 1}`}
-              </Typography>
-              <Typography variant="caption">
-                {track.points.length} points
-              </Typography>
-            </Popup>
-          </Polyline>
+            eventHandlers={{
+              click: (e) => {
+                if (isAdmin) {
+                  // Find the closest track point to the clicked location
+                  const clickedLatLng = e.latlng;
+                  let closestPoint = track.points[0];
+                  let minDistance = Infinity;
+                  
+                  track.points.forEach(point => {
+                    const distance = Math.sqrt(
+                      Math.pow(clickedLatLng.lat - point[0], 2) + 
+                      Math.pow(clickedLatLng.lng - point[1], 2)
+                    );
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      closestPoint = point;
+                    }
+                  });
+                  
+                  console.log('Track clicked at:', clickedLatLng, 'closest point:', closestPoint);
+                  
+                  // Open waypoint form with the closest point coordinates
+                  handleAddWaypoint({
+                    name: '',
+                    type: 'intermediary',
+                    details: '',
+                    coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
+                  });
+                }
+              },
+              mouseover: (e) => {
+                if (isAdmin) {
+                  e.target.setStyle({ weight: 5, color: '#4caf50' });
+                }
+              },
+              mouseout: (e) => {
+                e.target.setStyle({ weight: isAdmin ? 4 : 3, color: '#ff6b35' });
+              }
+            }}
+          />
         ))}
 
         {/* Uploaded GPX waypoints */}
@@ -338,6 +468,17 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             </Typography>
           </Popup>
         </Marker>
+
+        {/* Waypoint markers */}
+        {waypoints.map((waypoint) => (
+          <WaypointMarker
+            key={waypoint.id}
+            waypoint={waypoint}
+            onClick={handleWaypointClick}
+          />
+        ))}
+
+
       </MapContainer>
 
       {/* Legend */}
@@ -364,9 +505,53 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               <Box sx={{ width: 12, height: 12, backgroundColor: '#3F99F5', borderRadius: '50%' }} />
               <Typography variant="caption">GPX Waypoint</Typography>
             </Box>
+            {isAdmin && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50' }} />
+                <Typography variant="caption">Click Track to Add Waypoint</Typography>
+              </Box>
+            )}
+          </>
+        )}
+        
+        {/* Waypoint legend */}
+        {waypoints.length > 0 && (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 12, height: 12, backgroundColor: '#4ECDC4', borderRadius: '50%' }} />
+              <Typography variant="caption">Punct intermediar</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 12, height: 12, backgroundColor: '#FF6B35', borderRadius: '50%' }} />
+              <Typography variant="caption">Finish/Start</Typography>
+            </Box>
           </>
         )}
       </Box>
+
+      {/* Waypoint Form Dialog */}
+      <WaypointForm
+        isOpen={showWaypointForm}
+        onClose={() => {
+          setShowWaypointForm(false);
+          setEditingWaypoint(null);
+          setFormCoordinates({ lat: 0, lng: 0 });
+        }}
+        onSubmit={handleWaypointSubmit}
+        initialData={editingWaypoint || undefined}
+        coordinates={editingWaypoint?.coordinates || formCoordinates}
+      />
+
+      {/* Waypoint Display Dialog */}
+      {selectedWaypoint && (
+        <WaypointDisplay
+          waypoint={selectedWaypoint}
+          isAdmin={isAdmin}
+          onEdit={handleWaypointEdit}
+          onDelete={handleWaypointDelete}
+          onClose={() => setSelectedWaypoint(null)}
+        />
+      )}
     </Box>
   );
 };
