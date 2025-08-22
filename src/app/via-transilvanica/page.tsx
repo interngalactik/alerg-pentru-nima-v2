@@ -5,6 +5,8 @@ import { Box, Container, Typography, Paper, LinearProgress, Chip, Grid, Card, Ca
 import { LocationOn, DirectionsWalk, Timer, TrendingUp } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import Navigation from '@/components/via-transilvanica/Navigation';
+import GarminTracker from '@/components/via-transilvanica/GarminTracker';
+import { TrailProgress } from '@/lib/locationService';
 
 // Dynamically import the map component to avoid SSR issues
 const TrailMap = dynamic(() => import('@/components/via-transilvanica/TrailMap'), {
@@ -21,6 +23,7 @@ const ViaTransilvanicaPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [actualStartPoint, setActualStartPoint] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false); // Add client-side only state
+  const [trailProgress, setTrailProgress] = useState<TrailProgress | null>(null);
 
   // Set client-side flag after mount to prevent hydration issues
   useEffect(() => {
@@ -42,6 +45,13 @@ const ViaTransilvanicaPage = () => {
     setCurrentProgress(Math.min(progress, 100));
   }, [completedDistance, totalDistance]);
 
+  // Update progress when trail progress changes
+  useEffect(() => {
+    if (trailProgress) {
+      setCompletedDistance(trailProgress.completedDistance);
+    }
+  }, [trailProgress]);
+
   // Calculate countdown only on client side
   const timeUntilStart = isClient ? startDate.getTime() - currentDate.getTime() : 0;
   const daysUntilStart = isClient ? Math.floor(timeUntilStart / (1000 * 60 * 60 * 24)) : 0;
@@ -57,6 +67,11 @@ const ViaTransilvanicaPage = () => {
   // Handle start point change from GPX data
   const handleStartPointChange = (startPoint: [number, number] | null) => {
     setActualStartPoint(startPoint);
+  };
+
+  // Handle progress update from TrailMap
+  const handleProgressUpdate = (progress: TrailProgress) => {
+    setTrailProgress(progress);
   };
 
   return (
@@ -76,7 +91,7 @@ const ViaTransilvanicaPage = () => {
           <Typography variant="h5" sx={{ color: 'text.secondary', mb: 3 }}>
             1400 km pe drumul care unește
           </Typography>
-          
+
           {/* Mission Statement */}
           <Box sx={{ mb: 4, width: '59em', mx: 'auto' }}>
             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.2rem', lineHeight: 1.6 }}>
@@ -86,12 +101,55 @@ const ViaTransilvanicaPage = () => {
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, fontSize: '1.2rem', lineHeight: 1.6 }}>
               Pentru a putea acoperi costurile de hrană lunară a celor peste 140 de animale 
-care își trăiesc viețile în pace și armonie în sanctuar, e nevoie de <strong style={{ color: 'var(--orange)' }}>7000 de susținători</strong> care să trimită un mesaj în valoare de <strong style={{ color: 'var(--orange)' }}>2 euro / lună</strong>.
+              destinat animalelor de fermă salvate de la abator sau exploatare.
 <br></br>
 <br></br>
 Iar eu alerg pentru fiecare mesaj în parte.
             </Typography>
           </Box>
+
+          {/* Countdown */}
+          {isClient && timeUntilStart > 0 && (
+            <Box sx={{ mb: 2, p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 152, 0, 0.1)', borderRadius: 2 }}>
+              <Typography variant="body1" sx={{ mb: 1, color: 'var(--blue)', fontWeight: 'bold' }}>
+                Au mai rămas
+              </Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
+                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
+                    {daysUntilStart}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    zile
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
+                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
+                    {hoursUntilStart.toString().padStart(2, '0')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ore
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
+                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
+                    {minutesUntilStart.toString().padStart(2, '0')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    minute
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
+                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
+                    {secondsUntilStart.toString().padStart(2, '0')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    secunde
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          )}
 
           {/* Donation Call to Action */}
           <Box sx={{ mb: 4, p: 3, backgroundColor: 'rgba(25, 118, 210, 0.1)', borderRadius: 2, maxWidth: 600, mx: 'auto' }}>
@@ -143,48 +201,12 @@ Iar eu alerg pentru fiecare mesaj în parte.
           /> */}
         </Box>
 
-                  {/* Countdown */}
-           {isClient && timeUntilStart > 0 && (
-            <Box sx={{ mb: 2, p: 2,  display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 152, 0, 0.1)', borderRadius: 2 }}>
-              <Typography variant="body1" sx={{ mb: 1, color: 'var(--blue)', fontWeight: 'bold' }}>
-                Au mai rămas
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, flexWrap: 'wrap' }}>
-                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
-                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                    {daysUntilStart}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    zile
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
-                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                    {hoursUntilStart.toString().padStart(2, '0')}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    ore
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
-                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                    {minutesUntilStart.toString().padStart(2, '0')}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    minute
-                  </Typography>
-                </Box>
-                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
-                  <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                    {secondsUntilStart.toString().padStart(2, '0')}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    secunde
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          )}
+        {/* Garmin InReach Tracker */}
+        <GarminTracker 
+          trailPoints={[]} // This will be populated from GPX data
+          totalDistance={totalDistance}
+          onProgressUpdate={handleProgressUpdate}
+        />
 
         {/* Map Section */}
         <Paper sx={{ p: 3, mb: 4 }}>
@@ -196,6 +218,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
             progress={currentProgress}
             completedDistance={completedDistance}
             onStartPointChange={handleStartPointChange}
+            onProgressUpdate={handleProgressUpdate}
           />
         </Paper>
 
@@ -216,9 +239,6 @@ Iar eu alerg pentru fiecare mesaj în parte.
               <Typography variant="body2" color="text.secondary">
                 Data de început: 1 Septembrie 2025, 08:00
               </Typography>
-              {/* <Typography variant="body2" color="text.secondary">
-                Mănăstirea medievală din Bucovina
-              </Typography> */}
             </Paper>
           </Grid>
           
@@ -243,7 +263,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
 
         <br />
 
-                {/* Progress Overview */}
+        {/* Progress Overview */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={12}>
             <Paper sx={{ p: 3, height: '100%' }}>
@@ -310,7 +330,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
                     <Typography variant="h4" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
                       25
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary">
                       zile estimat
                     </Typography>
                   </Box>

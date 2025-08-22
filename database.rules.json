@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "locations": {
+      ".read": true,
+      ".write": true
+    },
+    "trailProgress": {
+      ".read": true,
+      ".write": true
+    },
+    "waypoints": {
+      ".read": true,
+      ".write": true
+    }
+  }
+} 
