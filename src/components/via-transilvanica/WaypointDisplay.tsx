@@ -65,7 +65,16 @@ export default function WaypointDisplay({
         await navigator.share(shareData);
       } else {
         // Fallback: copy to clipboard
-        const textToCopy = `${waypoint.name} - ${getTypeLabel(waypoint.type)}\n${waypoint.details}\nCoordonate: ${waypoint.coordinates.lat}, ${waypoint.coordinates.lng}`;
+        let textToCopy = `${waypoint.name} - ${getTypeLabel(waypoint.type)}\n${waypoint.details}\nCoordonate: ${waypoint.coordinates.lat}, ${waypoint.coordinates.lng}`;
+        
+        // Add date/time information if available
+        if (waypoint.date || waypoint.eta || waypoint.startDate || waypoint.startTime) {
+          textToCopy += '\n\nProgram și timp:';
+          if (waypoint.date) textToCopy += `\nData de sosire: ${new Date(waypoint.date).toLocaleDateString('ro-RO')}`;
+          if (waypoint.eta) textToCopy += `\nETA: ${new Date(waypoint.eta).toLocaleDateString('ro-RO')}`;
+          if (waypoint.startDate) textToCopy += `\nData de start: ${new Date(waypoint.startDate).toLocaleDateString('ro-RO')}`;
+          if (waypoint.startTime) textToCopy += `\nOra de start: ${waypoint.startTime}`;
+        }
         await navigator.clipboard.writeText(textToCopy);
         alert('Informațiile au fost copiate în clipboard!');
       }
@@ -116,6 +125,50 @@ export default function WaypointDisplay({
               {waypoint.details}
             </Typography>
           </Box>
+
+          {/* Date and Time Information */}
+          {(waypoint.date || waypoint.eta || waypoint.startDate || waypoint.startTime) && (
+            <>
+              <Divider />
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  Program și timp
+                </Typography>
+                {waypoint.date && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Data de sosire:</strong> {new Date(waypoint.date).toLocaleDateString('ro-RO')}
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Când vei ajunge la acest punct
+                    </Typography>
+                  </Typography>
+                )}
+                {waypoint.eta && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>ETA:</strong> {new Date(waypoint.eta).toLocaleDateString('ro-RO')}
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Timpul estimat de sosire
+                    </Typography>
+                  </Typography>
+                )}
+                {waypoint.startDate && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Data de start:</strong> {new Date(waypoint.startDate).toLocaleDateString('ro-RO')}
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Când vei începe următoarea etapă
+                    </Typography>
+                  </Typography>
+                )}
+                {waypoint.startTime && (
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>Ora de start:</strong> {waypoint.startTime}
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Ora când vei începe următoarea etapă
+                    </Typography>
+                  </Typography>
+                )}
+              </Box>
+            </>
+          )}
 
           <Divider />
 

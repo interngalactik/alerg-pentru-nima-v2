@@ -63,11 +63,8 @@ async function loadGPXData(): Promise<GPXData> {
   try {
     // Load the predefined GPX file using Node.js file system
     const gpxPath = join(process.cwd(), 'public', 'gpx', 'via-transilvanica.gpx');
-    console.log('Server-side GPX loading - Path:', gpxPath);
-    console.log('Server-side GPX loading - Current working directory:', process.cwd());
     
     const gpxContent = readFileSync(gpxPath, 'utf-8');
-    console.log('Server-side GPX loading - File size:', gpxContent.length, 'characters');
     
     if (gpxContent.length < 100) {
       throw new Error('GPX file appears to be empty or too small');
@@ -78,11 +75,6 @@ async function loadGPXData(): Promise<GPXData> {
     // Cache the parsed data
     gpxDataCache = parsed;
     gpxCacheTimestamp = now;
-    
-    console.log('GPX data loaded and cached:', {
-      tracks: parsed.tracks.length,
-      totalPoints: parsed.tracks.reduce((sum: number, track: any) => sum + track.points.length, 0)
-    });
     
     return parsed;
   } catch (error) {
@@ -117,13 +109,6 @@ function findClosestTrailPoint(
       closestIndex = i;
     }
   }
-
-  console.log('Closest trail point found:', {
-    location,
-    closestIndex,
-    closestPoint: trailPoints[closestIndex],
-    distance: minDistance.toFixed(6) + 'km'
-  });
 
   return { index: closestIndex, distance: minDistance };
 }
@@ -163,20 +148,9 @@ function calculateCompletedSegments(
       }
     }
     
-    console.log('Completed segments calculated:', {
-      totalSegments: completedSegments.length,
-      closestPointIndex: closestPoint.index,
-      distanceToTrail: closestPoint.distance.toFixed(3) + 'km'
-    });
-    
     return completedSegments;
   }
 
-  console.log('Location too far from trail:', {
-    distance: closestPoint.distance.toFixed(3) + 'km',
-    threshold: '1.0km'
-  });
-  
   return [];
 }
 
@@ -232,20 +206,11 @@ export async function calculateTrailProgress(newLocation: LocationPoint): Promis
     // Via Transilvanica is approximately 1400km
     const totalDistance = 1400; // Use the known actual distance
     
-    console.log(`Using known total distance: ${totalDistance}km`);
-    
     // Get existing progress to maintain state
     const existingProgress = await getExistingProgress();
     
     // Calculate completed segments
     const completedSegments = calculateCompletedSegments(newLocation, allTrailPoints);
-    
-    console.log('Server-side segment calculation result:', {
-      newLocation: { lat: newLocation.lat, lng: newLocation.lng },
-      totalTrailPoints: allTrailPoints.length,
-      completedSegmentsCount: completedSegments.length,
-      firstCompletedSegment: completedSegments[0] || 'none'
-    });
     
     // Calculate completed distance
     const completedDistance = calculateCompletedDistance(completedSegments);
@@ -265,13 +230,6 @@ export async function calculateTrailProgress(newLocation: LocationPoint): Promis
       estimatedCompletion,
       lastUpdated: Date.now()
     };
-    
-    console.log('Trail progress calculated:', {
-      completedDistance: completedDistance.toFixed(2) + 'km',
-      totalDistance: totalDistance.toFixed(2) + 'km',
-      progressPercentage: progressPercentage.toFixed(1) + '%',
-      segmentsCompleted: completedSegments.length
-    });
     
     return trailProgress;
     

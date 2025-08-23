@@ -25,7 +25,7 @@ export interface ParsedGPX {
 const parseXML = promisify(parseString);
 
 export function parseGPXServer(gpxContent: string): Promise<ParsedGPX> {
-  console.log('Starting server-side GPX parsing...');
+  // console.log('Starting server-side GPX parsing...');
   
   return parseXML(gpxContent).then((result: any) => {
     const waypoints: GPXWaypoint[] = [];
@@ -34,7 +34,6 @@ export function parseGPXServer(gpxContent: string): Promise<ParsedGPX> {
     // Parse waypoints
     if (result.gpx && result.gpx.wpt) {
       const wptElements = Array.isArray(result.gpx.wpt) ? result.gpx.wpt : [result.gpx.wpt];
-      console.log(`Found ${wptElements.length} waypoints`);
       
       wptElements.forEach((wpt: any) => {
         const lat = parseFloat(wpt.$.lat || '0');
@@ -62,14 +61,12 @@ export function parseGPXServer(gpxContent: string): Promise<ParsedGPX> {
     // Parse tracks
     if (result.gpx && result.gpx.trk) {
       const trkElements = Array.isArray(result.gpx.trk) ? result.gpx.trk : [result.gpx.trk];
-      console.log(`Found ${trkElements.length} tracks`);
       
       trkElements.forEach((trk: any, trackIndex: number) => {
         const name = trk.name && trk.name[0] ? trk.name[0] : `Track ${trackIndex + 1}`;
         
         if (trk.trkseg) {
           const trksegElements = Array.isArray(trk.trkseg) ? trk.trkseg : [trk.trkseg];
-          console.log(`Track ${trackIndex + 1} has ${trksegElements.length} segments`);
           
           trksegElements.forEach((trkseg: any, segIndex: number) => {
             if (trkseg.trkpt) {
@@ -78,8 +75,6 @@ export function parseGPXServer(gpxContent: string): Promise<ParsedGPX> {
               const points: [number, number][] = [];
               const elevation: number[] = [];
               const timestamps: string[] = [];
-
-              console.log(`Segment ${segIndex + 1} has ${trkptElements.length} points`);
 
               trkptElements.forEach((trkpt: any) => {
                 const lat = parseFloat(trkpt.$.lat || '0');
@@ -108,7 +103,6 @@ export function parseGPXServer(gpxContent: string): Promise<ParsedGPX> {
                   elevation: elevation.length > 0 ? elevation : undefined,
                   timestamps: timestamps.length > 0 ? timestamps : undefined
                 });
-                console.log(`Added track segment with ${points.length} points`);
               }
             }
           });
@@ -116,7 +110,6 @@ export function parseGPXServer(gpxContent: string): Promise<ParsedGPX> {
       });
     }
 
-    console.log(`Server-side parsing complete: ${waypoints.length} waypoints, ${tracks.length} tracks`);
     return { waypoints, tracks };
   }).catch((error: any) => {
     console.error('Error in server-side GPX parsing:', error);

@@ -19,7 +19,7 @@ export interface ParsedGPX {
 }
 
 export function parseGPX(gpxContent: string): ParsedGPX {
-  console.log('Starting GPX parsing...');
+  // console.log('Starting GPX parsing...');
   
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(gpxContent, 'text/xml');
@@ -36,7 +36,7 @@ export function parseGPX(gpxContent: string): ParsedGPX {
 
   // Parse waypoints
   const wptElements = xmlDoc.getElementsByTagName('wpt');
-  console.log(`Found ${wptElements.length} waypoints`);
+  // console.log(`Found ${wptElements.length} waypoints`);
   
   for (let i = 0; i < wptElements.length; i++) {
     const wpt = wptElements[i];
@@ -63,14 +63,14 @@ export function parseGPX(gpxContent: string): ParsedGPX {
 
   // Parse tracks
   const trkElements = xmlDoc.getElementsByTagName('trk');
-  console.log(`Found ${trkElements.length} tracks`);
+  // console.log(`Found ${trkElements.length} tracks`);
   
   for (let i = 0; i < trkElements.length; i++) {
     const trk = trkElements[i];
     const name = trk.getElementsByTagName('name')[0]?.textContent || `Track ${i + 1}`;
     
     const trksegElements = trk.getElementsByTagName('trkseg');
-    console.log(`Track ${i + 1} has ${trksegElements.length} segments`);
+    // console.log(`Track ${i + 1} has ${trksegElements.length} segments`);
     
     for (let j = 0; j < trksegElements.length; j++) {
       const trkseg = trksegElements[j];
@@ -80,7 +80,7 @@ export function parseGPX(gpxContent: string): ParsedGPX {
       const elevation: number[] = [];
       const timestamps: string[] = [];
 
-      console.log(`Segment ${j + 1} has ${trkptElements.length} points`);
+      // console.log(`Segment ${j + 1} has ${trkptElements.length} points`);
 
       for (let k = 0; k < trkptElements.length; k++) {
         const trkpt = trkptElements[k];
@@ -112,12 +112,12 @@ export function parseGPX(gpxContent: string): ParsedGPX {
           elevation: elevation.length > 0 ? elevation : undefined,
           timestamps: timestamps.length > 0 ? timestamps : undefined
         });
-        console.log(`Added track segment with ${points.length} points`);
+        // console.log(`Added track segment with ${points.length} points`);
       }
     }
   }
 
-  console.log(`Parsing complete: ${waypoints.length} waypoints, ${tracks.length} tracks`);
+  // console.log(`Parsing complete: ${waypoints.length} waypoints, ${tracks.length} tracks`);
   return { waypoints, tracks };
 }
 

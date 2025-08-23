@@ -27,6 +27,8 @@ const ViaTransilvanicaPage = () => {
   const [isClient, setIsClient] = useState(false); // Add client-side only state
   const [trackProgress, setTrackProgress] = useState<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
   const [smsCount, setSmsCount] = useState(0);
+  const [totalKmRun, setTotalKmRun] = useState(0); // Total km run from Strava
+  const [kmRunLoading, setKmRunLoading] = useState(true); // Loading state for km
 
 
   // Set client-side flag after mount to prevent hydration issues
@@ -126,6 +128,44 @@ const ViaTransilvanicaPage = () => {
     return () => clearInterval(intervalId);
   }, []);
 
+  // Get total km run from localStorage (fetched by main page)
+  useEffect(() => {
+    const getTotalKmRun = () => {
+      try {
+        const savedKmRun = localStorage.getItem('lastKmRun');
+        if (savedKmRun) {
+          const kmRun = parseFloat(savedKmRun);
+          setTotalKmRun(kmRun);
+          setKmRunLoading(false);
+        } else {
+          setKmRunLoading(false);
+        }
+      } catch (error) {
+        console.error('Error reading km run from localStorage:', error);
+        setKmRunLoading(false);
+      }
+    };
+
+    // Get initial value
+    getTotalKmRun();
+
+    // Listen for storage changes (in case main page updates the value)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'lastKmRun' && e.newValue) {
+        setTotalKmRun(parseFloat(e.newValue));
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also check periodically for updates (in case user navigates between pages)
+    const intervalId = setInterval(getTotalKmRun, 30000); // Check every 30 seconds
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(intervalId);
+    };
+  }, []);
 
 
   return (
@@ -147,14 +187,14 @@ const ViaTransilvanicaPage = () => {
           </Typography>
 
           {/* Mission Statement */}
-          <Box sx={{ mb: 4, width: '59em', mx: 'auto' }}>
+          <Box sx={{ mb: 4, maxWidth: '60em', mx: 'auto' }}>
             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.2rem', lineHeight: 1.6 }}>
               Pe 1 septembrie 2025 {isClient && timeUntilStart > 0 ? 'voi porni' : 'am pornit'} în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
               <a href="https://sanctuarnima.ro" target='__blank'><strong style={{ color: 'var(--orange)', textDecoration: 'underline' }}>Sanctuarul Nima</strong></a> - primul sanctuar din România 
               destinat animalelor de fermă salvate de la abator sau exploatare.
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, fontSize: '1.2rem', lineHeight: 1.6 }}>
-              Pentru a putea acoperi costurile de hrană lunară a celor peste 140 de animale au nevoie de 7000 de SMS-uri în valoare de 2 euro / lună. Alătură-te și tu celor {smsCount} de susținători.
+              Pentru a putea acoperi costurile de hrană lunară a celor peste 140 de animale au nevoie de <span style={{ color: 'var(--blue)', fontWeight: '900' }}>7000 de SMS-uri</span> în valoare de <span style={{ color: 'var(--blue)', fontWeight: '900' }}>2 euro / lună</span>. Alătură-te și tu celor <span style={{ color: 'var(--orange)', fontWeight: '900' }}>{smsCount}</span> de susținători.
 <br></br>
 <br></br>
 Iar eu alerg pentru fiecare mesaj în parte.
@@ -204,46 +244,132 @@ Iar eu alerg pentru fiecare mesaj în parte.
             </Box>
           )}
 
-          {/* Donation Call to Action */}
-          <Box sx={{ mb: 4, p: 3, backgroundColor: 'rgba(25, 118, 210, 0.1)', borderRadius: 2, maxWidth: 600, mx: 'auto' }}>
-            <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
-              Cum poți susține cauza?
-            </Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Donează <strong style={{ color: 'var(--orange)' }}>2 euro / lună</strong> pentru hrana animalelor salvate
-            </Typography>
-            <Button 
-              variant="contained" 
-              size="large"
-              onClick={() => {
-                const smsBody = "NIMA";
-                const smsNumber = "8845";
-                
-                // Check if it's Android
-                const isAndroid = /android/i.test(navigator.userAgent);
-                const smsLink = isAndroid 
-                  ? `sms:${smsNumber}?body=${smsBody}`  // Android format
-                  : `sms://${smsNumber}&body=${encodeURIComponent(smsBody)}`; // iOS format
-                
-                window.location.href = smsLink;
-              }}
-              sx={{ 
-                backgroundColor: 'var(--orange)',
-                color: 'white',
-                fontSize: '1.1rem',
-                padding: '12px 24px',
-                '&:hover': {
+          {/* Stats and Donation Section */}
+          <Box sx={{ 
+            mb: 4, 
+            display: 'flex', 
+            flexDirection: { xs: 'column', md: 'row' }, 
+            gap: 3, 
+            maxWidth: 1200, 
+            mx: 'auto' 
+          }}>
+            {/* Stats Box */}
+            <Box sx={{ 
+              flex: { xs: '1', md: '1' }, 
+              p: 3, 
+              backgroundColor: 'rgba(255, 152, 0, 0.1)', 
+              borderRadius: 2,
+              order: { xs: 1, md: 1 }
+            }}>
+              {/* KM Progress */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontSize: '0.9rem', textAlign: 'left' }}>
+                  KM*
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
+                    {kmRunLoading ? 'LOADING...' : `${totalKmRun.toFixed(2)}/7000`}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {kmRunLoading ? '...' : `${((totalKmRun / 7000) * 100).toFixed(1)}%`}
+                  </Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={kmRunLoading ? 0 : Math.min((totalKmRun / 7000) * 100, 100)} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4,
+                    backgroundColor: 'rgba(255, 152, 0, 0.2)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'var(--orange)'
+                    }
+                  }} 
+                />
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontStyle: 'italic', display: 'flex' }}>
+                  * kilometri alergați de la începutul campaniei
+                </Typography>
+              </Box>
+
+              {/* SMS Progress */}
+              <Box>
+                <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontSize: '0.9rem', textAlign: 'left' }}>
+                  SMS**
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
+                    {smsCount}/7000
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {((smsCount / 7000) * 100).toFixed(1)}%
+                  </Typography>
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={Math.min((smsCount / 7000) * 100, 100)} 
+                  sx={{ 
+                    height: 8, 
+                    borderRadius: 4,
+                    backgroundColor: 'rgba(255, 152, 0, 0.2)',
+                    '& .MuiLinearProgress-bar': {
+                      backgroundColor: 'var(--orange)'
+                    }
+                  }} 
+                />
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontStyle: 'italic', display: 'flex' }}>
+                  ** donațiile active din cele necesare hranei animăluțelor în fiecare lună
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Donation Call to Action */}
+            <Box sx={{ 
+              flex: { xs: '1', md: '1' }, 
+              p: 3, 
+              backgroundColor: 'rgba(25, 118, 210, 0.1)', 
+              borderRadius: 2,
+              order: { xs: 2, md: 2 }
+            }}>
+              <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
+                Cum poți susține cauza?
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Donează <strong style={{ color: 'var(--orange)' }}>2 euro / lună</strong> pentru hrana animalelor salvate
+              </Typography>
+              <Button 
+                variant="contained" 
+                size="large"
+                onClick={() => {
+                  const smsBody = "NIMA";
+                  const smsNumber = "8845";
+                  
+                  // Check if it's Android
+                  const isAndroid = /android/i.test(navigator.userAgent);
+                  const smsLink = isAndroid 
+                    ? `sms:${smsNumber}?body=${smsBody}`  // Android format
+                    : `sms://${smsNumber}&body=${encodeURIComponent(smsBody)}`; // iOS format
+                  
+                  window.location.href = smsLink;
+                }}
+                sx={{ 
                   backgroundColor: 'var(--orange)',
-                  opacity: 0.9
-                },
-                textTransform: 'none'
-              }}
-            >
-              Trimite NIMA prin SMS la 8845
-            </Button>
-            <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary', fontSize: '0.8rem', fontStyle: 'italic', opacity: 0.6 }}>
-              * Pentru dezabonare, trimite "NIMA STOP" la 8845
-            </Typography>
+                  color: 'white',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  padding: '12px 24px',
+                  '&:hover': {
+                    backgroundColor: 'var(--orange)',
+                    opacity: 0.9
+                  },
+                  textTransform: 'none'
+                }}
+              >
+                Trimite NIMA prin SMS la 8845
+              </Button>
+              <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary', fontSize: '0.8rem', fontStyle: 'italic', opacity: 0.6 }}>
+                * Pentru dezabonare, trimite "NIMA STOP" la 8845
+              </Typography>
+            </Box>
           </Box>
         </Box>
 

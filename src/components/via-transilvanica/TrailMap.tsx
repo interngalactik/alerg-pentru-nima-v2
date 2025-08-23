@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Box, Typography, Paper, Button } from '@mui/material';
-import { LocationOn, Add as AddIcon } from '@mui/icons-material';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { Box, Typography, Paper, Button, CircularProgress } from '@mui/material';
+import { LocationOn, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { parseGPX, ParsedGPX, GPXTrack, calculateDistance } from '@/lib/gpxParser';
 import { Waypoint, WaypointFormData } from '../../types/waypoint';
@@ -11,6 +11,16 @@ import { WaypointService } from '../../lib/waypointService';
 import { AdminAuthService } from '../../lib/adminAuthService';
 import { locationService, LocationPoint } from '../../lib/locationService';
 import WaypointForm from './WaypointForm';
+
+// Map Click Handler Component for Coordinate Selection
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click: (e) => {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
 
 interface TrailMapProps {
   currentLocation: { lat: number; lng: number };
@@ -55,6 +65,230 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     }
     return totalDistance;
   };
+
+  // Calculate distance to waypoint from current location along the GPX track
+  // This function now calculates the actual distance along the trail path instead of straight-line distance
+  const calculateDistanceToWaypoint = useMemo(() => {
+    return (waypointCoordinates: { lat: number; lng: number }): number => {
+      // Validate coordinates to prevent infinite loops
+      if (!waypointCoordinates || 
+          Math.abs(waypointCoordinates.lat) < 0.001 || 
+          Math.abs(waypointCoordinates.lng) < 0.001 ||
+          !currentLocationPoint || 
+          !gpxData || 
+          gpxData.tracks.length === 0) {
+        // Fallback to direct distance if no GPX data or invalid coordinates
+        if (!currentLocationPoint || !waypointCoordinates) return 0;
+        const currentLatLng: [number, number] = [currentLocationPoint.lat, currentLocationPoint.lng];
+        const waypointLatLng: [number, number] = [waypointCoordinates.lat, waypointCoordinates.lng];
+        return calculateDistance(currentLatLng, waypointLatLng);
+      }
+      
+      const track = gpxData.tracks[0];
+      const points = track.points;
+      
+      // Find closest point on track for current location
+      let currentLocationIndex = 0;
+      let currentLocationMinDistance = Infinity;
+      
+      points.forEach((trackPoint, index) => {
+        const distance = calculateDistance(
+          [currentLocationPoint.lat, currentLocationPoint.lng],
+          trackPoint
+        );
+        if (distance < currentLocationMinDistance) {
+          currentLocationMinDistance = distance;
+          currentLocationIndex = index;
+        }
+      });
+      
+      // Find closest point on track for waypoint
+      let waypointIndex = 0;
+      let waypointMinDistance = Infinity;
+      
+      points.forEach((trackPoint, index) => {
+        const distance = calculateDistance(
+          [waypointCoordinates.lat, waypointCoordinates.lng],
+          trackPoint
+        );
+        if (distance < waypointMinDistance) {
+          waypointMinDistance = distance;
+          waypointIndex = index;
+        }
+      });
+      
+      // Calculate distance along the track between these points
+      const startIndex = Math.min(currentLocationIndex, waypointIndex);
+      const endIndex = Math.max(currentLocationIndex, waypointIndex);
+      
+      let trackDistance = 0;
+      for (let i = startIndex; i < endIndex; i++) {
+        trackDistance += calculateDistance(points[i], points[i + 1]);
+      }
+      
+      return trackDistance;
+    };
+  }, [currentLocationPoint, gpxData]);
+
+  // Calculate actual track distance between two points along the GPX route
+  // This function calculates the distance along the actual GPX trail instead of straight-line distance
+  const calculateTrackDistanceBetweenPoints = (point1: [number, number], point2: [number, number]): number => {
+    if (!gpxData || gpxData.tracks.length === 0) {
+      // Fallback to direct distance if no GPX data
+      return calculateDistance(point1, point2);
+    }
+    
+    const track = gpxData.tracks[0];
+    const points = track.points;
+    
+    // Find closest points on track for both coordinates
+    let point1Index = 0;
+    let point2Index = 0;
+    let minDist1 = Infinity;
+    let minDist2 = Infinity;
+    
+    points.forEach((trackPoint, index) => {
+      const dist1 = calculateDistance(point1, trackPoint);
+      const dist2 = calculateDistance(point2, trackPoint);
+      
+      if (dist1 < minDist1) {
+        minDist1 = dist1;
+        point1Index = index;
+      }
+      
+      if (dist2 < minDist2) {
+        minDist2 = dist2;
+        point2Index = index;
+      }
+    });
+    
+    // Calculate distance along the track between these points
+    const startIndex = Math.min(point1Index, point2Index);
+    const endIndex = Math.max(point1Index, point2Index);
+    
+    let trackDistance = 0;
+    for (let i = startIndex; i < endIndex; i++) {
+      trackDistance += calculateDistance(points[i], points[i + 1]);
+    }
+    
+    return trackDistance;
+  };
+
+  // Sort waypoints by their position along the GPX track
+  const sortedWaypoints = useMemo(() => {
+    if (!waypoints.length || !gpxData || gpxData.tracks.length === 0) {
+      return waypoints;
+    }
+
+    const track = gpxData.tracks[0];
+    const points = track.points;
+
+    // Calculate the closest track point index for each waypoint
+    const waypointsWithTrackIndex = waypoints.map(waypoint => {
+      let closestIndex = 0;
+      let minDistance = Infinity;
+
+      points.forEach((point, index) => {
+        const distance = calculateDistance(
+          [waypoint.coordinates.lat, waypoint.coordinates.lng],
+          point
+        );
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      return {
+        ...waypoint,
+        trackIndex: closestIndex
+      };
+    });
+
+    // Sort by track index (position along the route)
+    return waypointsWithTrackIndex
+      .sort((a, b) => a.trackIndex - b.trackIndex)
+      .map(({ trackIndex, ...waypoint }) => waypoint); // Remove trackIndex from final result
+  }, [waypoints, gpxData]);
+
+  // Calculate distance from the last waypoint on the map or from start point
+  const calculateDistanceFromLastWaypoint = (currentWaypointIndex: number): { distance: number; fromName: string } => {
+    if (!sortedWaypoints.length) return { distance: 0, fromName: '' };
+    
+    const currentWaypoint = sortedWaypoints[currentWaypointIndex];
+    
+    // For the first waypoint, calculate distance from start point
+    if (currentWaypointIndex === 0) {
+      if (startPoint) {
+        const currentLatLng: [number, number] = [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng];
+        const startLatLng: [number, number] = [startPoint[0], startPoint[1]];
+        const distance = calculateTrackDistanceBetweenPoints(startLatLng, currentLatLng);
+        return { distance, fromName: 'Start' };
+      }
+      return { distance: 0, fromName: '' };
+    }
+    
+    // For other waypoints, calculate from previous waypoint
+    const previousWaypoint = sortedWaypoints[currentWaypointIndex - 1];
+    if (!previousWaypoint) {
+      if (startPoint) {
+        const currentLatLng: [number, number] = [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng];
+        const startLatLng: [number, number] = [startPoint[0], startPoint[1]];
+        const distance = calculateTrackDistanceBetweenPoints(startLatLng, currentLatLng);
+        return { distance, fromName: 'Start' };
+      }
+      return { distance: 0, fromName: '' };
+    }
+    
+    const currentLatLng: [number, number] = [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng];
+    const previousLatLng: [number, number] = [previousWaypoint.coordinates.lat, previousWaypoint.coordinates.lng];
+    
+    const distance = calculateTrackDistanceBetweenPoints(previousLatLng, currentLatLng);
+    return { distance, fromName: previousWaypoint.name };
+  };
+
+  // Check if current location has passed a waypoint
+  const hasPassedWaypoint = (waypointCoordinates: { lat: number; lng: number }): boolean => {
+    if (!currentLocationPoint || !gpxData || gpxData.tracks.length === 0) return false;
+    
+    const track = gpxData.tracks[0];
+    const points = track.points;
+    
+    // Find closest point on track to current location
+    let currentClosestIndex = 0;
+    let currentMinDistance = Infinity;
+    
+    points.forEach((point, index) => {
+      const distance = calculateDistance(
+        [currentLocationPoint.lat, currentLocationPoint.lng],
+        point
+      );
+      if (distance < currentMinDistance) {
+        currentMinDistance = distance;
+        currentClosestIndex = index;
+      }
+    });
+    
+    // Find closest point on track to waypoint
+    let waypointClosestIndex = 0;
+    let waypointMinDistance = Infinity;
+    
+    points.forEach((point, index) => {
+      const distance = calculateDistance(
+        [waypointCoordinates.lat, waypointCoordinates.lng],
+        point
+      );
+      if (distance < waypointMinDistance) {
+        waypointMinDistance = distance;
+        waypointClosestIndex = index;
+      }
+    });
+    
+    // If current location is further along the track than the waypoint, we've passed it
+    return currentClosestIndex > waypointClosestIndex;
+  };
+
+
 
   // Get start and end points from GPX data
   const startPoint = useMemo(() => {
@@ -110,14 +344,6 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     const totalDistance = calculateTotalTrackDistance(points);
     const progressPercentage = totalDistance > 0 ? (completedDistance / totalDistance) * 100 : 0;
 
-    console.log('Track progress calculated:', {
-      closestPointIndex,
-      minDistance: minDistance.toFixed(2) + ' km',
-      completedDistance: completedDistance.toFixed(2) + ' km',
-      totalDistance: totalDistance.toFixed(2) + ' km',
-      progressPercentage: progressPercentage.toFixed(1) + '%'
-    });
-
     return {
       completedPoints,
       remainingPoints,
@@ -169,9 +395,9 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   useEffect(() => {
     const loadWaypoints = async () => {
       try {
-        console.log('Loading waypoints...');
+        // console.log('Loading waypoints...');
         const waypointsData = await WaypointService.getAllWaypoints();
-        console.log('Waypoints loaded:', waypointsData);
+        // console.log('Waypoints loaded:', waypointsData);
         setWaypoints(waypointsData);
       } catch (error) {
         console.error('Error loading waypoints:', error);
@@ -182,8 +408,31 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
     // Subscribe to waypoint changes
     const unsubscribe = WaypointService.subscribeToWaypoints((waypointsData) => {
-      console.log('Waypoints updated via subscription:', waypointsData);
-      setWaypoints(waypointsData);
+      // Filter out invalid waypoints with coordinates 0,0
+      const validWaypoints = waypointsData.filter(waypoint => 
+        waypoint.coordinates && 
+        Math.abs(waypoint.coordinates.lat) > 0.001 && 
+        Math.abs(waypoint.coordinates.lng) > 0.001
+      );
+      
+      // Log if we found invalid waypoints
+      if (validWaypoints.length !== waypointsData.length) {
+        console.warn(`Filtered out ${waypointsData.length - validWaypoints.length} invalid waypoints with coordinates 0,0`);
+        
+        // Find and remove invalid waypoints from database
+        waypointsData.forEach(waypoint => {
+          if (!waypoint.coordinates || 
+              Math.abs(waypoint.coordinates.lat) < 0.001 || 
+              Math.abs(waypoint.coordinates.lng) < 0.001) {
+            console.warn(`Removing invalid waypoint: ${waypoint.name} (ID: ${waypoint.id})`);
+            WaypointService.deleteWaypoint(waypoint.id).catch(error => {
+              console.error('Failed to remove invalid waypoint:', error);
+            });
+          }
+        });
+      }
+      
+      setWaypoints(validWaypoints);
     });
 
     return unsubscribe;
@@ -223,9 +472,9 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
     // Subscribe to real-time location updates
     const unsubscribe = locationService.onLatestLocationUpdate((latestLocation) => {
-      console.log('Current location updated:', latestLocation);
+      // console.log('Current location updated:', latestLocation);
       if (latestLocation) {
-        console.log('Setting current location point:', latestLocation.lat, latestLocation.lng);
+        // console.log('Setting current location point:', latestLocation.lat, latestLocation.lng);
       }
       setCurrentLocationPoint(latestLocation);
     });
@@ -237,12 +486,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   // Waypoint click is now handled directly in the popup
 
   const handleAddWaypoint = (data: WaypointFormData) => {
-    console.log('handleAddWaypoint called with:', data);
+    // console.log('handleAddWaypoint called with:', data);
     setEditingWaypoint(null);
     setShowWaypointForm(true);
     // Store the coordinates for the form
     setFormCoordinates(data.coordinates);
-    console.log('Form coordinates set to:', data.coordinates);
+    // console.log('Form coordinates set to:', data.coordinates);
   };
 
   const handleWaypointSubmit = async (data: WaypointFormData) => {
@@ -264,11 +513,35 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     setShowWaypointForm(true);
   };
 
+  const [deletingWaypointId, setDeletingWaypointId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const handleWaypointDelete = async (waypointId: string) => {
+    // Show confirmation dialog
+    if (!confirm('Ești sigur că vrei să ștergi acest waypoint? Această acțiune nu poate fi anulată.')) {
+      return;
+    }
+
     try {
+      setDeletingWaypointId(waypointId);
+      setDeleteError(null);
       await WaypointService.deleteWaypoint(waypointId);
+      
+      // Force refresh waypoints to ensure proper ordering
+        setTimeout(async () => {
+          try {
+            const refreshedWaypoints = await WaypointService.getAllWaypoints();
+            setWaypoints(refreshedWaypoints);
+          } catch (refreshError) {
+            console.error('Error refreshing waypoints:', refreshError);
+          }
+        }, 100); // Small delay to ensure Firebase update is processed
+      
     } catch (error) {
       console.error('Error deleting waypoint:', error);
+      setDeleteError('Eroare la ștergerea waypoint-ului. Te rugăm să încerci din nou.');
+    } finally {
+      setDeletingWaypointId(null);
     }
   };
 
@@ -286,12 +559,9 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
     // Wait for Leaflet to be available
     const checkLeaflet = () => {
-      console.log('Checking for Leaflet...');
       if (typeof window !== 'undefined' && (window as any).L) {
-        console.log('Leaflet found, setting leafletLoaded to true');
         setLeafletLoaded(true);
       } else {
-        console.log('Leaflet not found, retrying...');
         setTimeout(checkLeaflet, 100);
       }
     };
@@ -303,12 +573,10 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       setGpxError(null);
       
       try {
-        console.log('Loading GPX file...');
         const response = await fetch('/gpx/Via-Transilvanica-Traseu.gpx');
         
         if (response.ok) {
           const gpxContent = await response.text();
-          console.log('GPX file loaded, size:', gpxContent.length, 'characters');
           
           if (gpxContent.length < 100) {
             throw new Error('GPX file appears to be empty or too small');
@@ -317,7 +585,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           const parsed = parseGPX(gpxContent);
           setGpxData(parsed);
           setUploadedTracks(parsed.tracks);
-          console.log('GPX file parsed successfully:', parsed);
+          
         } else {
           throw new Error(`Failed to load GPX file: ${response.status} ${response.statusText}`);
         }
@@ -422,7 +690,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   const progressIndex = Math.floor(points.length * 0.3); // 30% along the track
                   const testPoint = points[progressIndex];
                   await locationService.simulateLocationUpdate(testPoint[0], testPoint[1]);
-                  console.log('Test location update sent:', testPoint);
+                  // console.log('Test location update sent:', testPoint);
                 }
               }
             } catch (error) {
@@ -460,6 +728,16 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      {/* Map Click Handler for Coordinate Selection */}
+      {showWaypointForm || editingWaypoint ? (
+        <MapClickHandler
+          onMapClick={(lat, lng) => {
+            setFormCoordinates({ lat, lng });
+            // console.log('Map clicked for coordinate selection:', { lat, lng });
+          }}
+        />
+      ) : null}
 
         {/* Progress overlay */}
         <Box
@@ -506,22 +784,43 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
             
             if (validElevations.length > 0) {
-              const minElev = Math.min(...validElevations);
-              const maxElev = Math.max(...validElevations);
-          return (
+              // Calculate total elevation gain for the entire trail
+              let totalElevationGain = 0;
+              for (let i = 1; i < validElevations.length; i++) {
+                const elevationDiff = validElevations[i] - validElevations[i - 1];
+                if (elevationDiff > 0) {
+                  totalElevationGain += elevationDiff;
+                }
+              }
+              
+              // Calculate elevation gain up to current location
+              let completedElevationGain = 0;
+              if (currentLocationPoint && trackProgress.completedPoints.length > 0) {
+                // Use the length of completed points to determine how many elevation points to include
+                const completedElevations = validElevations.slice(0, trackProgress.completedPoints.length);
+                
+                for (let i = 1; i < completedElevations.length; i++) {
+                  const elevationDiff = completedElevations[i] - completedElevations[i - 1];
+                  if (elevationDiff > 0) {
+                    completedElevationGain += elevationDiff;
+                  }
+                }
+              }
+              
+              return (
                 <Typography variant="caption" display="block" color="info.main">
-                  📈 Elevație: {minElev.toFixed(0)}m - {maxElev.toFixed(0)}m
+                  📈 Elevație: {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m ({((completedElevationGain / totalElevationGain) * 100).toFixed(1)}%)
                 </Typography>
-          );
-        }
-        return null;
+              );
+            }
+            return null;
           })()}
           
-          {currentLocationPoint && (
+          {/* {currentLocationPoint && (
             <Typography variant="caption" display="block" color="info.main">
               📍 Locația curentă: {new Date(currentLocationPoint.timestamp).toLocaleTimeString('ro-RO')} - {currentLocationPoint.lat.toFixed(4)}, {currentLocationPoint.lng.toFixed(4)}
             </Typography>
-          )}
+          )} */}
         </Box>
 
         {/* GPX Track - Completed portion (green) */}
@@ -551,15 +850,44 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     }
                   });
                   
-                  console.log('Completed track clicked at:', clickedLatLng, 'closest point:', closestPoint);
-                  
-                  // Open waypoint form with the closest point coordinates
-                  handleAddWaypoint({
-                    name: '',
-                    type: 'intermediary',
-                    details: '',
-                    coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
-                  });
+                  // If we're in coordinate selection mode, update coordinates instead of opening form
+                  if (showWaypointForm || editingWaypoint) {
+                    setFormCoordinates({ lat: closestPoint[0], lng: closestPoint[1] });
+                    // console.log('Updated form coordinates from completed track click:', { lat: closestPoint[0], lng: closestPoint[1] });
+                    
+                    // Show feedback that coordinates were updated
+                    const feedbackElement = document.createElement('div');
+                    feedbackElement.style.cssText = `
+                      position: fixed;
+                      top: 20px;
+                      right: 20px;
+                      background: #4caf50;
+                      color: white;
+                      padding: 12px 20px;
+                      border-radius: 8px;
+                      z-index: 10000;
+                      font-family: Arial, sans-serif;
+                      font-size: 14px;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    `;
+                    feedbackElement.textContent = `Coordonatele au fost actualizate: ${closestPoint[0].toFixed(6)}, ${closestPoint[1].toFixed(6)}`;
+                    document.body.appendChild(feedbackElement);
+                    
+                    // Remove feedback after 3 seconds
+                    setTimeout(() => {
+                      if (feedbackElement.parentNode) {
+                        feedbackElement.parentNode.removeChild(feedbackElement);
+                      }
+                    }, 3000);
+                  } else {
+                    // Open waypoint form with the closest point coordinates
+                    handleAddWaypoint({
+                      name: '',
+                      type: 'intermediary',
+                      details: '',
+                      coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
+                    });
+                  }
                 }
               },
               mouseover: (e) => {
@@ -601,15 +929,44 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     }
                   });
                   
-                  console.log('Remaining track clicked at:', clickedLatLng, 'closest point:', closestPoint);
-                  
-                  // Open waypoint form with the closest point coordinates
-                  handleAddWaypoint({
-                    name: '',
-                    type: 'intermediary',
-                    details: '',
-                    coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
-                  });
+                  // If we're in coordinate selection mode, update coordinates instead of opening form
+                  if (showWaypointForm || editingWaypoint) {
+                    setFormCoordinates({ lat: closestPoint[0], lng: closestPoint[1] });
+                    // console.log('Updated form coordinates from remaining track click:', { lat: closestPoint[0], lng: closestPoint[1] });
+                    
+                    // Show feedback that coordinates were updated
+                    const feedbackElement = document.createElement('div');
+                    feedbackElement.style.cssText = `
+                      position: fixed;
+                      top: 20px;
+                      right: 20px;
+                      background: #4caf50;
+                      color: white;
+                      padding: 12px 20px;
+                      border-radius: 8px;
+                      z-index: 10000;
+                      font-family: Arial, sans-serif;
+                      font-size: 14px;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    `;
+                    feedbackElement.textContent = `Coordonatele au fost actualizate: ${closestPoint[0].toFixed(6)}, ${closestPoint[1].toFixed(6)}`;
+                    document.body.appendChild(feedbackElement);
+                    
+                    // Remove feedback after 3 seconds
+                    setTimeout(() => {
+                      if (feedbackElement.parentNode) {
+                        feedbackElement.parentNode.removeChild(feedbackElement);
+                      }
+                    }, 3000);
+                  } else {
+                    // Open waypoint form with the closest point coordinates
+                    handleAddWaypoint({
+                      name: '',
+                      type: 'intermediary',
+                      details: '',
+                      coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
+                    });
+                  }
                 }
               },
               mouseover: (e) => {
@@ -650,8 +1007,6 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                       closestPoint = point;
                     }
                   });
-                  
-                  console.log('Track clicked at:', clickedLatLng, 'closest point:', closestPoint);
                   
                   // Open waypoint form with the closest point coordinates
                   handleAddWaypoint({
@@ -752,15 +1107,21 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         )}
 
         {/* Waypoint markers with popups */}
-        {waypoints.map((waypoint) => (
+        {sortedWaypoints
+          .filter(waypoint => 
+            waypoint.coordinates && 
+            Math.abs(waypoint.coordinates.lat) > 0.001 && 
+            Math.abs(waypoint.coordinates.lng) > 0.001
+          )
+          .map((waypoint, index) => (
         <Marker 
             key={waypoint.id}
             position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
             icon={L.divIcon({
-              html: `<div style="background-color: ${waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4'}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${waypoint.type === 'finish-start' ? '🏁' : '📍'}</div>`,
+              html: `<div style="background-color: ${waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4'}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${index + 1}</div>`,
               className: 'waypoint-marker',
-              iconSize: [16, 16],
-              iconAnchor: [8, 8]
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
             })}
         >
           <Popup>
@@ -787,12 +1148,70 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 {waypoint.details && (
                   <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
                     {waypoint.details}
-              </Typography>
-            )}
+                  </Typography>
+                )}
+                
+                {/* Date and Time Information */}
+                {(waypoint.date || waypoint.eta || waypoint.startDate || waypoint.startTime) && (
+                  <Box sx={{ mb: 2 }}>
+                    {waypoint.date && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                        <strong>Data de sosire:</strong> {new Date(waypoint.date).toLocaleDateString('ro-RO')}
+                      </Typography>
+                    )}
+
+                    {waypoint.eta && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                        <strong>ETA:</strong> {new Date(waypoint.eta).toLocaleDateString('ro-RO')}
+                      </Typography>
+                    )}
+                    {waypoint.startDate && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                        <strong>Data de start:</strong> {new Date(waypoint.startDate).toLocaleDateString('ro-RO')}
+                      </Typography>
+                    )}
+                    {waypoint.startTime && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                        <strong>Ora de start:</strong> {waypoint.startTime}
+                      </Typography>
+                    )}
+                  </Box>
+                )}
+                
+                {/* Distance Information */}
+                {(() => {
+                  const distanceInfo = calculateDistanceFromLastWaypoint(index);
+                  const hasPassed = hasPassedWaypoint(waypoint.coordinates);
+                  
+                  return (
+                    <>
+                      {/* Distance from current location - only show if not passed */}
+                      {currentLocationPoint && !hasPassed && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontStyle: 'italic' }}>
+                          <strong>Distanță de la locația curentă:</strong> {calculateDistanceToWaypoint(waypoint.coordinates).toFixed(2)} km
+                        </Typography>
+                      )}
+                      
+                      {/* Distance from previous waypoint or start */}
+                      {distanceInfo.distance > 0 && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontStyle: 'italic' }}>
+                          <strong>Distanță de la {distanceInfo.fromName === 'Start' ? 'start' : `punctul ${distanceInfo.fromName}`}:</strong> {distanceInfo.distance.toFixed(2)} km
+                        </Typography>
+                      )}
+                      
+                      {/* Show if waypoint has been passed */}
+                      {hasPassed && (
+                        <Typography variant="caption" sx={{ color: 'success.main', display: 'block', mb: 1, fontStyle: 'italic' }}>
+                          ✅ <strong>Etapă completată</strong>
+                        </Typography>
+                      )}
+                    </>
+                  );
+                })()}
                 
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
                   Coordonate: {waypoint.coordinates.lat.toFixed(4)}, {waypoint.coordinates.lng.toFixed(4)}
-              </Typography>
+                </Typography>
                 
                 <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
                   <Button
@@ -823,10 +1242,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                         size="small"
                         variant="outlined"
                         color="error"
+                        startIcon={deletingWaypointId === waypoint.id ? <CircularProgress size={16} /> : <DeleteIcon />}
                         onClick={() => handleWaypointDelete(waypoint.id)}
+                        disabled={deletingWaypointId === waypoint.id}
                         sx={{ fontSize: '0.75rem' }}
                       >
-                        🗑️ Șterge
+                        {deletingWaypointId === waypoint.id ? 'Șterg...' : '🗑️ Șterge'}
                       </Button>
                     </>
                   )}
@@ -1203,7 +1624,17 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50', borderRadius: '50%' }} />
             <Typography variant="caption">Profil Elevație</Typography>
-      </Box>
+          </Box>
+        )}
+        
+        {/* Coordinate Selection Mode Indicator */}
+        {(showWaypointForm || editingWaypoint) && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'warning.light', borderRadius: 1 }}>
+            <Box sx={{ width: 12, height: 12, backgroundColor: '#ff9800', borderRadius: '50%' }} />
+            <Typography variant="caption" sx={{ color: 'warning.contrastText' }}>
+              Mod selectare coordonate - Click pe hartă sau pe traseu pentru precizie
+            </Typography>
+          </Box>
         )}
       </Box>
 
@@ -1218,6 +1649,14 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         onSubmit={handleWaypointSubmit}
         initialData={editingWaypoint || undefined}
         coordinates={editingWaypoint?.coordinates || formCoordinates}
+        onCoordinateSelect={(coordinates) => {
+          // Update form coordinates when user selects from map
+          setFormCoordinates(coordinates);
+          // Close the form to allow map interaction
+          setShowWaypointForm(false);
+          // Show a message to click on the map
+          alert('Formularul a fost închis pentru a permite selectarea coordonatelor pe hartă. Click pe hartă pentru a selecta coordonatele, apoi deschide din nou formularul.');
+        }}
       />
 
 

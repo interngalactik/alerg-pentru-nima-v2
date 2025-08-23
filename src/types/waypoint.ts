@@ -7,6 +7,10 @@ export interface Waypoint {
     lat: number;
     lng: number;
   };
+  date?: string; // Date for the waypoint
+  eta?: string; // Estimated time of arrival
+  startDate?: string; // Start date for finish/start waypoints
+  startTime?: string; // Start time for finish/start waypoints
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -20,6 +24,10 @@ export interface WaypointFormData {
     lat: number;
     lng: number;
   };
+  date?: string; // Date for the waypoint
+  eta?: string; // Estimated time of arrival
+  startDate?: string; // Start date for finish/start waypoints
+  startTime?: string; // Start time for finish/start waypoints
 }
 
 export interface WaypointDisplayProps {
