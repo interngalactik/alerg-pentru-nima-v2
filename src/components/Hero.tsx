@@ -123,7 +123,7 @@ export default function Hero() {
         `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=2'}`,
         `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=3'}`,
         `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=4'}`,
-        // `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=5'}`,
+        `${STRAVA_CALL_ACTIVITIES + refreshData.access_token + '&page=5'}`,
       ];
       
       const responses = await Promise.all(endpoints.map(endpoint => fetch(endpoint)));

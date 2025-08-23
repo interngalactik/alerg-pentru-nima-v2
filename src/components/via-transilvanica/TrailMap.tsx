@@ -17,9 +17,10 @@ interface TrailMapProps {
   progress: number;
   completedDistance: number;
   onStartPointChange?: (startPoint: [number, number] | null) => void;
+  onProgressUpdate?: (progress: { completedDistance: number; totalDistance: number; progressPercentage: number }) => void;
 }
 
-const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, completedDistance, onStartPointChange }) => {
+const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, completedDistance, onStartPointChange, onProgressUpdate }) => {
   const [isClient, setIsClient] = useState(false);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
   const [gpxData, setGpxData] = useState<ParsedGPX | null>(null);
@@ -34,6 +35,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [currentLocationPoint, setCurrentLocationPoint] = useState<LocationPoint | null>(null);
   const [elevationCursorPosition, setElevationCursorPosition] = useState<[number, number] | null>(null);
   const mapRef = useRef<any>(null);
+  const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
 
   // Get all route points from GPX tracks
   const allRoutePoints = useMemo(() => {
@@ -43,10 +45,87 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     return gpxData.tracks.flatMap(track => track.points);
   }, [gpxData]);
 
+  // Helper function to calculate total distance of a track
+  const calculateTotalTrackDistance = (points: [number, number][]) => {
+    if (points.length < 2) return 0;
+    
+    let totalDistance = 0;
+    for (let i = 1; i < points.length; i++) {
+      totalDistance += calculateDistance(points[i - 1], points[i]);
+    }
+    return totalDistance;
+  };
+
   // Get start and end points from GPX data
   const startPoint = useMemo(() => {
     return allRoutePoints.length > 0 ? allRoutePoints[0] : null;
   }, [allRoutePoints]);
+
+  // Calculate progress along the track based on current location
+  const trackProgress = useMemo(() => {
+    if (!gpxData || !currentLocationPoint || gpxData.tracks.length === 0) {
+      return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
+    }
+
+    const track = gpxData.tracks[0]; // Use the first track
+    const points = track.points;
+    
+    if (points.length === 0) {
+      return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
+    }
+
+    // Find the closest point on the track to current location
+    let closestPointIndex = 0;
+    let minDistance = Infinity;
+
+    points.forEach((point, index) => {
+      const distance = calculateDistance(
+        [currentLocationPoint.lat, currentLocationPoint.lng],
+        point
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPointIndex = index;
+      }
+    });
+
+    // If current location is more than 5km from the track, don't count progress
+    if (minDistance > 5) {
+      console.log('Current location too far from track:', minDistance, 'km');
+      return { 
+        completedPoints: [], 
+        remainingPoints: points, 
+        completedDistance: 0, 
+        totalDistance: calculateTotalTrackDistance(points), 
+        progressPercentage: 0 
+      };
+    }
+
+    // Split track into completed and remaining portions
+    const completedPoints = points.slice(0, closestPointIndex + 1);
+    const remainingPoints = points.slice(closestPointIndex + 1);
+    
+    // Calculate distances
+    const completedDistance = calculateTotalTrackDistance(completedPoints);
+    const totalDistance = calculateTotalTrackDistance(points);
+    const progressPercentage = totalDistance > 0 ? (completedDistance / totalDistance) * 100 : 0;
+
+    console.log('Track progress calculated:', {
+      closestPointIndex,
+      minDistance: minDistance.toFixed(2) + ' km',
+      completedDistance: completedDistance.toFixed(2) + ' km',
+      totalDistance: totalDistance.toFixed(2) + ' km',
+      progressPercentage: progressPercentage.toFixed(1) + '%'
+    });
+
+    return {
+      completedPoints,
+      remainingPoints,
+      completedDistance,
+      totalDistance,
+      progressPercentage
+    };
+  }, [gpxData, currentLocationPoint]);
 
   // Manual end point coordinates for Via Transilvanica
   const endPoint: [number, number] = [44.624535, 22.666960];
@@ -57,6 +136,34 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       onStartPointChange(startPoint);
     }
   }, [startPoint, onStartPointChange]);
+
+  // Notify parent component when progress updates
+  useEffect(() => {
+    if (trackProgress.totalDistance > 0 && onProgressUpdate && trackProgress.progressPercentage > 0) {
+      // Check if progress has actually changed to prevent duplicate updates
+      const currentProgress = {
+        completedDistance: trackProgress.completedDistance,
+        totalDistance: trackProgress.totalDistance,
+        progressPercentage: trackProgress.progressPercentage
+      };
+
+      const lastProgress = lastProgressUpdateRef.current;
+      if (lastProgress && 
+          lastProgress.completedDistance === currentProgress.completedDistance &&
+          lastProgress.totalDistance === currentProgress.totalDistance &&
+          lastProgress.progressPercentage === currentProgress.progressPercentage) {
+        return; // No change, don't update
+      }
+
+      // Debounce progress updates to prevent rapid successive calls
+      const timeoutId = setTimeout(() => {
+        onProgressUpdate(currentProgress);
+        lastProgressUpdateRef.current = currentProgress;
+      }, 100); // 100ms debounce
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [trackProgress.completedDistance, trackProgress.totalDistance, trackProgress.progressPercentage, onProgressUpdate]);
 
   // Load waypoints on component mount
   useEffect(() => {
@@ -94,7 +201,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     
     // Set up interval to check admin status periodically
     const interval = setInterval(checkAdminStatus, 30000); // Check every 30 seconds
-    
+
     return () => {
       clearInterval(interval);
     };
@@ -295,11 +402,37 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             variant="contained"
             onClick={centerOnCurrentLocation}
             startIcon={<LocationOn />}
-            sx={{ backgroundColor: '#f44336', color: 'white', boxShadow: 2 }}
+            sx={{ backgroundColor: 'var(--orange)', color: 'white', boxShadow: 2 }}
           >
             Locația curentă
           </Button>
         )}
+        
+        {/* Test button for simulating location updates */}
+        {/* <Button
+          variant="contained"
+          onClick={async () => {
+            try {
+              // Simulate a location update along the track
+              if (gpxData && gpxData.tracks.length > 0) {
+                const track = gpxData.tracks[0];
+                const points = track.points;
+                if (points.length > 0) {
+                  // Simulate progress by moving along the track
+                  const progressIndex = Math.floor(points.length * 0.3); // 30% along the track
+                  const testPoint = points[progressIndex];
+                  await locationService.simulateLocationUpdate(testPoint[0], testPoint[1]);
+                  console.log('Test location update sent:', testPoint);
+                }
+              }
+            } catch (error) {
+              console.error('Error simulating location update:', error);
+            }
+          }}
+          sx={{ backgroundColor: '#2196f3', color: 'white', boxShadow: 2 }}
+        >
+          Test Progress
+        </Button> */}
         {gpxData && (
           <Button
             variant="contained"
@@ -317,16 +450,16 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
 
       {/* Map Container */}
-      <MapContainer
+    <MapContainer
         center={currentLocationPoint ? [currentLocationPoint.lat, currentLocationPoint.lng] : [currentLocation.lat, currentLocation.lng]}
-        zoom={8}
+      zoom={8}
         style={{ height: '500px', width: '100%' }}
-        ref={mapRef}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+      ref={mapRef}
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
 
         {/* Progress overlay */}
         <Box
@@ -342,12 +475,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             maxWidth: 300
           }}
         >
-          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-            {progress.toFixed(1)}% complet
-          </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+            {trackProgress.progressPercentage > 0 ? trackProgress.progressPercentage.toFixed(1) : progress.toFixed(1)}% complet
+            </Typography>
           <Typography variant="caption" color="text.secondary">
-            {completedDistance} / 1400 km
-          </Typography>
+            {trackProgress.completedDistance > 0 ? trackProgress.completedDistance.toFixed(2) : completedDistance.toFixed(2)} / {trackProgress.totalDistance > 0 ? trackProgress.totalDistance.toFixed(2) : '1400'} km
+            </Typography>
           
           {gpxLoading && (
             <Typography variant="caption" display="block" color="primary">
@@ -375,13 +508,13 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             if (validElevations.length > 0) {
               const minElev = Math.min(...validElevations);
               const maxElev = Math.max(...validElevations);
-              return (
+          return (
                 <Typography variant="caption" display="block" color="info.main">
                   📈 Elevație: {minElev.toFixed(0)}m - {maxElev.toFixed(0)}m
                 </Typography>
-              );
-            }
-            return null;
+          );
+        }
+        return null;
           })()}
           
           {currentLocationPoint && (
@@ -391,8 +524,108 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           )}
         </Box>
 
-        {/* Uploaded GPX tracks */}
-        {uploadedTracks.map((track, trackIndex) => (
+        {/* GPX Track - Completed portion (green) */}
+        {trackProgress.completedPoints.length > 0 && (
+            <Polyline
+            key="completed-track"
+            positions={trackProgress.completedPoints}
+              color="#4caf50"
+            weight={4}
+              opacity={0.9}
+            eventHandlers={{
+              click: (e) => {
+                if (isAdmin) {
+                  // Find the closest track point to the clicked location
+                  const clickedLatLng = e.latlng;
+                  let closestPoint = trackProgress.completedPoints[0];
+                  let minDistance = Infinity;
+                  
+                  trackProgress.completedPoints.forEach(point => {
+                    const distance = Math.sqrt(
+                      Math.pow(clickedLatLng.lat - point[0], 2) + 
+                      Math.pow(clickedLatLng.lng - point[1], 2)
+                    );
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      closestPoint = point;
+                    }
+                  });
+                  
+                  console.log('Completed track clicked at:', clickedLatLng, 'closest point:', closestPoint);
+                  
+                  // Open waypoint form with the closest point coordinates
+                  handleAddWaypoint({
+                    name: '',
+                    type: 'intermediary',
+                    details: '',
+                    coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
+                  });
+                }
+              },
+              mouseover: (e) => {
+                if (isAdmin) {
+                  e.target.setStyle({ weight: 6, color: '#45a049' });
+                }
+              },
+              mouseout: (e) => {
+                e.target.setStyle({ weight: 4, color: '#4caf50' });
+              }
+            }}
+          />
+        )}
+
+        {/* GPX Track - Remaining portion (orange) */}
+        {trackProgress.remainingPoints.length > 0 && (
+          <Polyline
+            key="remaining-track"
+            positions={trackProgress.remainingPoints}
+            color="#ff6b35"
+            weight={isAdmin ? 4 : 3}
+            opacity={0.8}
+            eventHandlers={{
+              click: (e) => {
+                if (isAdmin) {
+                  // Find the closest track point to the clicked location
+                  const clickedLatLng = e.latlng;
+                  let closestPoint = trackProgress.remainingPoints[0];
+                  let minDistance = Infinity;
+                  
+                  trackProgress.remainingPoints.forEach(point => {
+                    const distance = Math.sqrt(
+                      Math.pow(clickedLatLng.lat - point[0], 2) + 
+                      Math.pow(clickedLatLng.lng - point[1], 2)
+                    );
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      closestPoint = point;
+                    }
+                  });
+                  
+                  console.log('Remaining track clicked at:', clickedLatLng, 'closest point:', closestPoint);
+                  
+                  // Open waypoint form with the closest point coordinates
+                  handleAddWaypoint({
+                    name: '',
+                    type: 'intermediary',
+                    details: '',
+                    coordinates: { lat: closestPoint[0], lng: closestPoint[1] }
+                  });
+                }
+              },
+              mouseover: (e) => {
+                if (isAdmin) {
+                  e.target.setStyle({ weight: 5, color: '#4caf50' });
+                }
+              },
+              mouseout: (e) => {
+                e.target.setStyle({ weight: isAdmin ? 4 : 3, color: '#ff6b35' });
+              }
+            }}
+          />
+        )}
+
+        {/* Fallback: Show full track if no progress calculation */}
+        {trackProgress.completedPoints.length === 0 && trackProgress.remainingPoints.length === 0 && uploadedTracks.map((track, trackIndex) => (
           <Polyline
             key={`track-${trackIndex}`}
             positions={track.points}
@@ -443,84 +676,84 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
 
 
-        {/* Start marker */}
-        {startPoint && (
+      {/* Start marker */}
+      {startPoint && (
           <Marker 
-            position={startPoint}
+          position={startPoint}
             icon={createIcon(
-              'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiM0Y2FmNTAiLz4KPHBhdGggZD0iTTEyIDEzQzEzLjY2IDEzIDE1IDExLjY2IDE1IDEwQzE1IDguMzQgMTMuNjYgNyAxMiA3QzEwLjM0IDcgOSA4LjM0IDkgMTBDOSAxMS42NiAxMC4zNCAxMyAxMiAxM1oiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
-              [24, 24],
-              [12, 12],
-              [0, -12]
+            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiM0Y2FmNTAiLz4KPHBhdGggZD0iTTEyIDEzQzEzLjY2IDEzIDE1IDExLjY2IDE1IDEwQzE1IDguMzQgMTMuNjYgNyAxMiA3QzEwLjM0IDcgOSA4LjM0IDkgMTBDOSAxMS42NiAxMC4zNCAxMyAxMiAxM1oiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
+            [24, 24],
+            [12, 12],
+            [0, -12]
             )}
           >
             <Popup>
               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                Start - {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
+              Start - {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
               </Typography>
               <Typography variant="caption">
-                Începutul traseului Via Transilvanica
+              Începutul traseului Via Transilvanica
               </Typography>
             </Popup>
           </Marker>
-        )}
+      )}
 
-        {/* End marker */}
-        <Marker 
-          position={endPoint}
-          icon={createIcon(
-            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjY2MDAiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNCIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
-            [24, 24],
-            [12, 12],
-            [0, -12]
-          )}
-        >
-          <Popup>
-            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-              Destinație - {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
-            </Typography>
-            <Typography variant="caption">
-              Sfârșitul traseului Via Transilvanica
-            </Typography>
-          </Popup>
-        </Marker>
+      {/* End marker */}
+          <Marker 
+        position={endPoint}
+            icon={createIcon(
+          'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjY2MDAiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNCIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
+          [24, 24],
+          [12, 12],
+          [0, -12]
+            )}
+          >
+            <Popup>
+              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+            Destinație - {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
+              </Typography>
+              <Typography variant="caption">
+            Sfârșitul traseului Via Transilvanica
+              </Typography>
+            </Popup>
+          </Marker>
 
         {/* Current location marker from Garmin InReach */}
         {currentLocationPoint && (
-          <Marker 
+        <Marker
             key={`current-location-${currentLocationPoint.timestamp}`}
             position={[currentLocationPoint.lat, currentLocationPoint.lng]}
             icon={L.divIcon({
-              html: '<div style="background-color: #f44336; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
+              html: '<div style="background-color: var(--orange); width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
               className: 'current-location-marker',
               iconSize: [16, 16],
               iconAnchor: [8, 8]
             })}
-          >
-            <Popup>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+        >
+          <Popup>
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                 Locația curentă (Garmin InReach)
-              </Typography>
+            </Typography>
               <Typography variant="caption">
                 {currentLocationPoint.lat.toFixed(4)}, {currentLocationPoint.lng.toFixed(4)}
               </Typography>
               {currentLocationPoint.timestamp && (
-                <Typography variant="caption" display="block">
+            <Typography variant="caption" display="block">
                   Actualizat: {new Date(currentLocationPoint.timestamp).toLocaleString('ro-RO')}
-                </Typography>
+            </Typography>
               )}
               {currentLocationPoint.accuracy && (
-                <Typography variant="caption" display="block">
+              <Typography variant="caption" display="block">
                   Precizie: ±{currentLocationPoint.accuracy}m
-                </Typography>
-              )}
-            </Popup>
-          </Marker>
+              </Typography>
+            )}
+          </Popup>
+        </Marker>
         )}
 
         {/* Waypoint markers with popups */}
         {waypoints.map((waypoint) => (
-          <Marker
+        <Marker 
             key={waypoint.id}
             position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
             icon={L.divIcon({
@@ -529,12 +762,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               iconSize: [16, 16],
               iconAnchor: [8, 8]
             })}
-          >
-            <Popup>
+        >
+          <Popup>
               <Box sx={{ minWidth: 200 }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
                   {waypoint.name}
-                </Typography>
+            </Typography>
                 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Box
@@ -554,12 +787,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 {waypoint.details && (
                   <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
                     {waypoint.details}
-                  </Typography>
-                )}
+              </Typography>
+            )}
                 
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
                   Coordonate: {waypoint.coordinates.lat.toFixed(4)}, {waypoint.coordinates.lng.toFixed(4)}
-                </Typography>
+              </Typography>
                 
                 <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
                   <Button
@@ -571,7 +804,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     }}
                     sx={{ fontSize: '0.75rem' }}
                   >
-                    🗺️ Google Maps
+                    🗺️ Deschide în Google Maps
                   </Button>
                   
                   {isAdmin && (
@@ -599,13 +832,13 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   )}
                 </Box>
               </Box>
-            </Popup>
-          </Marker>
-        ))}
+          </Popup>
+        </Marker>
+      ))}
 
         {/* Elevation cursor position pin */}
         {elevationCursorPosition && (
-          <Marker
+        <Marker 
             position={elevationCursorPosition}
             icon={L.divIcon({
               html: '<div style="background-color: #ff5722; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">📍</div>',
@@ -613,20 +846,20 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               iconSize: [20, 20],
               iconAnchor: [10, 10]
             })}
-          >
-            <Popup>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+        >
+          <Popup>
+            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                 Poziția cursorului
-              </Typography>
-              <Typography variant="caption">
+            </Typography>
+            <Typography variant="caption">
                 {elevationCursorPosition[0].toFixed(4)}, {elevationCursorPosition[1].toFixed(4)}
-              </Typography>
-            </Popup>
-          </Marker>
-        )}
+            </Typography>
+          </Popup>
+        </Marker>
+      )}
 
 
-      </MapContainer>
+    </MapContainer>
 
       {/* Integrated Elevation Profile */}
       {gpxData && gpxData.tracks.length > 0 && (
@@ -658,22 +891,22 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 }
               }
               
-              return (
+    return (
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" color="text.secondary">
                     Elevația minimă: {minElev.toFixed(0)} m
-                  </Typography>
+          </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Elevația maximă: {maxElev.toFixed(0)} m
-                  </Typography>
+          </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Urcare totală: <span style={{ color: '#4caf50', fontWeight: 'bold' }}>+{totalGain.toFixed(0)} m</span>
-                  </Typography>
+          </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Coborâre totală: <span style={{ color: '#f44336', fontWeight: 'bold' }}>-{totalLoss.toFixed(0)} m</span>
-                  </Typography>
-                </Box>
-              );
+        </Typography>
+      </Box>
+    );
             }
             return null;
           })()}
@@ -727,7 +960,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   
                   const elevationPath = `M ${points.join(' L ')}`;
                   
-                  return (
+    return (
                     <>
                       <path
                         d={elevationPath}
@@ -783,21 +1016,21 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   const currPoint = allPoints[i];
                   const distance = calculateDistance(prevPoint, currPoint);
                   totalDistance += distance;
-                }
-                
-                return (
+  }
+
+  return (
                   <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', px: 1 }}>
                     {[0, 25, 50, 75, 100].map(percent => {
                       const distanceKm = (percent / 100) * totalDistance;
                       return (
                         <Typography key={percent} variant="caption" color="text.secondary">
                           {distanceKm.toFixed(0)} km
-                        </Typography>
+        </Typography>
                       );
                     })}
-                  </Box>
-                );
-              }
+      </Box>
+    );
+  }
               return null;
             })()}
             
@@ -809,15 +1042,15 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               if (validElevations.length > 0) {
                 const minElev = Math.min(...validElevations);
                 const maxElev = Math.max(...validElevations);
-                
-                return (
+
+  return (
                   <Box sx={{ position: 'absolute', top: 0, left: 0, bottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 1 }}>
                     {[0, 25, 50, 75, 100].map(percent => {
                       const elevation = maxElev - (percent / 100) * (maxElev - minElev);
                       return (
                         <Typography key={percent} variant="caption" color="text.secondary">
                           {elevation.toFixed(0)} m
-                        </Typography>
+          </Typography>
                       );
                     })}
                   </Box>
@@ -907,19 +1140,19 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                  setElevationCursorPosition(null);
                }}
             />
-          </Box>
-          
+      </Box>
+
           {/* <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary">
               <strong>Interpretare:</strong> Linia verde arată variația de elevație de-a lungul traseului. 
               Zonele mai înalte sunt reprezentate prin vârfuri, iar zonele mai joase prin văi.
-            </Typography>
+          </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               <strong>Interactiv:</strong> Mută cursorul pe grafic pentru a vedea poziția pe hartă.
             </Typography>
           </Box> */}
         </Paper>
-      )}
+        )}
 
       {/* Legend */}
       <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -928,11 +1161,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           <Typography variant="caption">Start</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 12, height: 12, backgroundColor: '#f44336', borderRadius: '50%' }} />
+          <Box sx={{ width: 12, height: 12, backgroundColor: 'var(--orange)', borderRadius: '50%' }} />
           <Typography variant="caption">Locația curentă (Garmin)</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 12, height: 12, backgroundColor: '#ff6600', borderRadius: '50%' }} />
+          <Box sx={{ width: 12, height: 12, backgroundColor: 'var(--blue)', borderRadius: '50%' }} />
           <Typography variant="caption">Destinație</Typography>
         </Box>
         {gpxData && (
@@ -943,10 +1176,10 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             </Box>
 
             {isAdmin && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50' }} />
                 <Typography variant="caption">Click Track to Add Waypoint</Typography>
-              </Box>
+            </Box>
             )}
           </>
         )}
@@ -970,7 +1203,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50', borderRadius: '50%' }} />
             <Typography variant="caption">Profil Elevație</Typography>
-          </Box>
+      </Box>
         )}
       </Box>
 

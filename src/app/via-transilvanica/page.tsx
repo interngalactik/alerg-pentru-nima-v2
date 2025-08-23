@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Box, Container, Typography, Paper, LinearProgress, Chip, Grid, Card, CardContent, Button } from '@mui/material';
 import { LocationOn, DirectionsWalk, Timer, TrendingUp } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import Navigation from '@/components/via-transilvanica/Navigation';
 import GarminTracker from '@/components/via-transilvanica/GarminTracker';
-import { TrailProgress } from '@/lib/locationService';
+import CryptoJS from 'crypto-js';
+
 
 // Dynamically import the map component to avoid SSR issues
 const TrailMap = dynamic(() => import('@/components/via-transilvanica/TrailMap'), {
@@ -23,7 +25,9 @@ const ViaTransilvanicaPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [actualStartPoint, setActualStartPoint] = useState<[number, number] | null>(null);
   const [isClient, setIsClient] = useState(false); // Add client-side only state
-  const [trailProgress, setTrailProgress] = useState<TrailProgress | null>(null);
+  const [trackProgress, setTrackProgress] = useState<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
+  const [smsCount, setSmsCount] = useState(0);
+
 
   // Set client-side flag after mount to prevent hydration issues
   useEffect(() => {
@@ -45,12 +49,7 @@ const ViaTransilvanicaPage = () => {
     setCurrentProgress(Math.min(progress, 100));
   }, [completedDistance, totalDistance]);
 
-  // Update progress when trail progress changes
-  useEffect(() => {
-    if (trailProgress) {
-      setCompletedDistance(trailProgress.completedDistance);
-    }
-  }, [trailProgress]);
+
 
   // Calculate countdown only on client side
   const timeUntilStart = isClient ? startDate.getTime() - currentDate.getTime() : 0;
@@ -61,7 +60,7 @@ const ViaTransilvanicaPage = () => {
 
   // Calculate estimated completion (if already started)
   const estimatedCompletion = completedDistance > 0 && timeUntilStart <= 0
-    ? new Date(currentDate.getTime() + ((totalDistance - completedDistance) / (completedDistance / Math.abs(daysUntilStart))) * 24 * 60 * 60 * 1000)
+    ? new Date(currentDate.getTime() + (((trackProgress?.totalDistance || totalDistance) - completedDistance) / (completedDistance / Math.abs(daysUntilStart))) * 24 * 60 * 60 * 1000)
     : null;
 
   // Handle start point change from GPX data
@@ -70,15 +69,70 @@ const ViaTransilvanicaPage = () => {
   };
 
   // Handle progress update from TrailMap
-  const handleProgressUpdate = (progress: TrailProgress) => {
-    setTrailProgress(progress);
+  const handleProgressUpdate = (progress: { completedDistance: number; totalDistance: number; progressPercentage: number }) => {
+    // Only update if the values have actually changed to prevent infinite loops
+    setCompletedDistance(prev => progress.completedDistance !== prev ? progress.completedDistance : prev);
+    setCurrentProgress(prev => progress.progressPercentage !== prev ? progress.progressPercentage : prev);
+    setTrackProgress(prev => {
+      if (!prev || 
+          prev.completedDistance !== progress.completedDistance || 
+          prev.totalDistance !== progress.totalDistance || 
+          prev.progressPercentage !== progress.progressPercentage) {
+        return progress;
+      }
+      return prev;
+    });
   };
+
+  // Fetch SMS count from API
+  useEffect(() => {
+    const fetchSmsCount = async () => {
+      try {
+        const authId = "675";
+        const authKey = "8a0e3a142a901c2b9c90c94e40118d07";
+        const apiUrl = `https://sms-2w-api.syscomdigital.ro/stats/total-donatori/${authId}`;
+        const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const startDate = new Date('2022-03-15');
+        const fromDate = startDate.toISOString().slice(0, 10);
+
+        const authorization = CryptoJS.SHA1(`${authKey}&${ts}`).toString();
+        const data = new URLSearchParams({
+          authorization: authorization,
+          ts: ts,
+          'from-date': fromDate,
+        });
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          body: data,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        });
+
+        const responseData = await response.text();
+        const arr = responseData.split('"');
+        const sms = arr[3];
+        setSmsCount(parseInt(sms));
+      } catch (err) {
+        console.error('Error fetching SMS count:', err);
+        // Keep the previous value if there's an error
+      }
+    };
+
+    fetchSmsCount(); // Call fetch function on component mount
+    const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+
 
   return (
     <>
       <Navigation />
       <Container maxWidth="xl" sx={{ py: 4 }}>
-        {/* Hero Section */}
+                {/* Hero Section */}
         <Box sx={{ textAlign: 'center', mb: 6 }}>
           <Typography variant="h4" component="h1" sx={{ 
             fontWeight: 'bold', 
@@ -100,8 +154,7 @@ const ViaTransilvanicaPage = () => {
               destinat animalelor de fermă salvate de la abator sau exploatare.
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, fontSize: '1.2rem', lineHeight: 1.6 }}>
-              Pentru a putea acoperi costurile de hrană lunară a celor peste 140 de animale 
-              destinat animalelor de fermă salvate de la abator sau exploatare.
+              Pentru a putea acoperi costurile de hrană lunară a celor peste 140 de animale au nevoie de 7000 de SMS-uri în valoare de 2 euro / lună. Alătură-te și tu celor {smsCount} de susținători.
 <br></br>
 <br></br>
 Iar eu alerg pentru fiecare mesaj în parte.
@@ -192,153 +245,31 @@ Iar eu alerg pentru fiecare mesaj în parte.
               * Pentru dezabonare, trimite "NIMA STOP" la 8845
             </Typography>
           </Box>
-          
-          {/* <Chip 
-            label="Planificat" 
-            color="warning" 
-            icon={<DirectionsWalk />}
-            sx={{ fontSize: '1.1rem', padding: 1 }}
-          /> */}
         </Box>
 
-        {/* Garmin InReach Tracker */}
-        <GarminTracker 
-          trailPoints={[]} // This will be populated from GPX data
-          totalDistance={totalDistance}
-          onProgressUpdate={handleProgressUpdate}
-        />
 
         {/* Map Section */}
         <Paper sx={{ p: 3, mb: 4 }}>
           <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
             Traseul Via Transilvanica
           </Typography>
-          <TrailMap 
-            currentLocation={currentLocation}
-            progress={currentProgress}
-            completedDistance={completedDistance}
-            onStartPointChange={handleStartPointChange}
-            onProgressUpdate={handleProgressUpdate}
-          />
+                      <TrailMap
+              currentLocation={currentLocation}
+              progress={currentProgress}
+              completedDistance={completedDistance}
+              onStartPointChange={handleStartPointChange}
+              onProgressUpdate={handleProgressUpdate}
+            />
         </Paper>
 
-        {/* Current Status */}
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
-                <LocationOn sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Punctul de start
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Mănăstirea Putna</strong>
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Coordonate: {actualStartPoint ? `${actualStartPoint[0].toFixed(4)}, ${actualStartPoint[1].toFixed(4)}` : 'Se încarcă...'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Data de început: 1 Septembrie 2025, 08:00
-              </Typography>
-            </Paper>
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
-                <TrendingUp sx={{ mr: 1, verticalAlign: 'middle' }} />
-                Planificare
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Durată estimată: 25 zile</strong>
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Distanță medie: {Math.ceil(totalDistance / 25)} km/zi
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Viteza estimată: 4-5 km/h
-              </Typography>
-            </Paper>
-          </Grid>
-        </Grid>
+                {/* Garmin InReach Tracker */}
+                <GarminTracker 
+          trailPoints={[]} // This will be populated from GPX data
+          totalDistance={trackProgress?.totalDistance || totalDistance}
+          trackProgress={trackProgress}
+        />
 
-        <br />
 
-        {/* Progress Overview */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={12}>
-            <Paper sx={{ p: 3, height: '100%' }}>
-              <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
-                Progresul meu
-              </Typography>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {completedDistance} km din {totalDistance} km
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {currentProgress.toFixed(1)}%
-                  </Typography>
-                </Box>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={currentProgress} 
-                  sx={{ 
-                    height: 12, 
-                    borderRadius: 6,
-                    backgroundColor: 'rgba(0,0,0,0.1)',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: 'var(--blue)',
-                      borderRadius: 6
-                    }
-                  }}
-                />
-              </Box>
-              
-              <Grid container spacing={2}>
-                <Grid item xs={6} sm={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                      {completedDistance}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      km parcurși
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                      {totalDistance - completedDistance}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      km rămași
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                      {isClient ? daysUntilStart : '...'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      zile până la început
-                    </Typography>
-                  </Box>
-                </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Box sx={{ textAlign: 'center' }}>
-                    <Typography variant="h4" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-                      25
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      zile estimat
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
-            </Paper>
-          </Grid>
-        </Grid>
       </Container>
     </>
   );

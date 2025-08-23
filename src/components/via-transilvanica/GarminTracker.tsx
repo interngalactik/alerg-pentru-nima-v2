@@ -19,20 +19,22 @@ import {
   MyLocation, 
   Refresh, 
   Timeline,
-  Speed,
-  Timer
+  Speed
 } from '@mui/icons-material';
-import { locationService, LocationPoint, TrailProgress } from '@/lib/locationService';
+import { locationService, LocationPoint } from '@/lib/locationService';
+import { TrailProgress } from '@/lib/trailProgressService';
 
 interface GarminTrackerProps {
   trailPoints: [number, number][];
   totalDistance: number;
+  trackProgress?: { completedDistance: number; totalDistance: number; progressPercentage: number } | null;
   onProgressUpdate?: (progress: TrailProgress) => void;
 }
 
 const GarminTracker: React.FC<GarminTrackerProps> = ({ 
   trailPoints, 
   totalDistance, 
+  trackProgress: mapTrackProgress,
   onProgressUpdate 
 }) => {
   const [currentLocation, setCurrentLocation] = useState<LocationPoint | null>(null);
@@ -114,14 +116,12 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   };
 
   const getCurrentProgress = () => {
-    if (!progress) return 0;
-    return Math.min((progress.completedDistance / totalDistance) * 100, 100);
+    if (!mapTrackProgress || totalDistance <= 0) return 0;
+    const completedDistance = Math.min(mapTrackProgress.completedDistance, totalDistance);
+    return Math.min((completedDistance / totalDistance) * 100, 100);
   };
 
-  const getEstimatedCompletion = () => {
-    if (!progress?.estimatedCompletion) return null;
-    return new Date(progress.estimatedCompletion);
-  };
+
 
   if (loading && locations.length === 0) {
     return (
@@ -158,7 +158,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2, backgroundColor: 'rgba(25, 118, 210, 0.05)' }}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'var(--blue)' }}>
-              Current Status
+              Starea actuală
             </Typography>
             
             {currentLocation ? (
@@ -170,17 +170,17 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  Last update: {new Date(currentLocation.timestamp).toLocaleString()}
+                  Ultima actualizare: {new Date(currentLocation.timestamp).toLocaleString()}
                 </Typography>
                 {currentLocation.accuracy && (
                   <Typography variant="caption" color="text.secondary" display="block">
-                    Accuracy: ±{currentLocation.accuracy}m
+                    Acuratețe: ±{currentLocation.accuracy}m
                   </Typography>
                 )}
               </Box>
             ) : (
               <Typography variant="body2" color="text.secondary">
-                No location data available
+                Nu există date de localizare disponibile
               </Typography>
             )}
           </Paper>
@@ -190,31 +190,29 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2, backgroundColor: 'rgba(76, 175, 80, 0.05)' }}>
             <Typography variant="subtitle2" sx={{ mb: 1, color: 'var(--blue)' }}>
-              Trail Progress
+              Progresul traseului
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Timeline sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
-                {progress?.completedDistance.toFixed(1) || 0} km / {totalDistance} km
+                {mapTrackProgress?.completedDistance ? mapTrackProgress.completedDistance.toFixed(2) : '0.00'} km / {totalDistance.toFixed(2)} km
               </Typography>
             </Box>
+            {mapTrackProgress?.completedDistance && mapTrackProgress.completedDistance > totalDistance && (
+              <Typography variant="caption" color="warning.main" display="block">
+                ⚠️ Completed distance exceeds total distance. Using total distance as maximum.
+              </Typography>
+            )}
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Speed sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
-                {getCurrentProgress().toFixed(1)}% Complete
+                {getCurrentProgress().toFixed(1)}% Complet
               </Typography>
             </Box>
 
-            {getEstimatedCompletion() && (
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Timer sx={{ mr: 1, color: 'var(--orange)' }} />
-                <Typography variant="body2">
-                  ETA: {getEstimatedCompletion()?.toLocaleDateString()}
-                </Typography>
-              </Box>
-            )}
+            {/* ETA calculation removed - not available in new progress system */}
           </Paper>
         </Grid>
 
