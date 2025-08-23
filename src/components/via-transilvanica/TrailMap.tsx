@@ -1372,42 +1372,96 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   
                   const totalDistance = cumulativeDistances[cumulativeDistances.length - 1];
                   
-                  // Create elevation path with proper distance scaling
-                  const points = validElevations.map((elev, index) => {
+                  // Find the closest point to current location for progress calculation
+                  let completedIndex = 0;
+                  if (currentLocationPoint) {
+                    let minDistance = Infinity;
+                    allPoints.forEach((point, index) => {
+                      const distance = calculateDistance(
+                        [currentLocationPoint.lat, currentLocationPoint.lng],
+                        point
+                      );
+                      if (distance < minDistance) {
+                        minDistance = distance;
+                        completedIndex = index;
+                      }
+                    });
+                  }
+                  
+                  // Create completed elevation path (green)
+                  const completedPoints = validElevations.slice(0, completedIndex + 1).map((elev, index) => {
                     const distancePercent = (cumulativeDistances[index] / totalDistance) * 100;
                     const y = 100 - ((elev - minElev) / (maxElev - minElev)) * 100;
                     return `${distancePercent},${y}`;
                   });
                   
-                  const elevationPath = `M ${points.join(' L ')}`;
+                  // Create remaining elevation path (orange)
+                  const remainingPoints = validElevations.slice(completedIndex + 1).map((elev, index) => {
+                    const actualIndex = completedIndex + 1 + index;
+                    const distancePercent = (cumulativeDistances[actualIndex] / totalDistance) * 100;
+                    const y = 100 - ((elev - minElev) / (maxElev - minElev)) * 100;
+                    return `${distancePercent},${y}`;
+                  });
                   
-    return (
+                  const completedPath = completedPoints.length > 0 ? `M ${completedPoints.join(' L ')}` : '';
+                  const remainingPath = remainingPoints.length > 0 ? `M ${remainingPoints.join(' L ')}` : '';
+                  
+                  return (
                     <>
-                      <path
-                        d={elevationPath}
-                        fill="none"
-                        stroke="#4caf50"
-                        strokeWidth="0.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      {/* Fill area under the line */}
-                      <path
-                        d={`${elevationPath} L 100,100 L 0,100 Z`}
-                        fill="url(#elevationGradient)"
-                        opacity="0.3"
-                      />
+                      {/* Completed elevation path (green) */}
+                      {completedPath && (
+                        <>
+                          <path
+                            d={completedPath}
+                            fill="none"
+                            stroke="#4caf50"
+                            strokeWidth="0.3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          {/* Fill area under completed path */}
+                          <path
+                            d={`${completedPath} L ${(cumulativeDistances[completedIndex] / totalDistance) * 100},100 L 0,100 Z`}
+                            fill="url(#completedGradient)"
+                            opacity="0.3"
+                          />
+                        </>
+                      )}
+                      
+                      {/* Remaining elevation path (orange) */}
+                      {remainingPath && (
+                        <>
+                          <path
+                            d={remainingPath}
+                            fill="none"
+                            stroke="#ff6b35"
+                            strokeWidth="0.3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          {/* Fill area under remaining path */}
+                          <path
+                            d={`${remainingPath} L 100,100 L ${(cumulativeDistances[completedIndex] / totalDistance) * 100},100 Z`}
+                            fill="url(#remainingGradient)"
+                            opacity="0.3"
+                          />
+                        </>
+                      )}
                     </>
                   );
                 }
                 return null;
               })()}
               
-              {/* Gradient definition */}
+              {/* Gradient definitions */}
               <defs>
-                <linearGradient id="elevationGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <linearGradient id="completedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stopColor="#4caf50" stopOpacity="0.8" />
                   <stop offset="100%" stopColor="#4caf50" stopOpacity="0.1" />
+                </linearGradient>
+                <linearGradient id="remainingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ff6b35" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="#ff6b35" stopOpacity="0.1" />
                 </linearGradient>
               </defs>
               
@@ -1418,67 +1472,13 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 y1="0"
                 x2="0"
                 y2="100"
-                stroke="#ff5722"
-                strokeWidth="1"
+                stroke="var(--orange)"
+                strokeWidth="0.25"
                 strokeDasharray="2,2"
                 opacity="0"
                 style={{ pointerEvents: 'none' }}
               />
             </svg>
-            
-            {/* Distance markers (X-axis) */}
-            {(() => {
-              const allPoints = gpxData.tracks.flatMap(track => track.points);
-              if (allPoints.length > 1) {
-                // Calculate total distance using proper Haversine formula
-                let totalDistance = 0;
-                for (let i = 1; i < allPoints.length; i++) {
-                  const prevPoint = allPoints[i - 1];
-                  const currPoint = allPoints[i];
-                  const distance = calculateDistance(prevPoint, currPoint);
-                  totalDistance += distance;
-  }
-
-  return (
-                  <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'space-between', px: 1 }}>
-                    {[0, 25, 50, 75, 100].map(percent => {
-                      const distanceKm = (percent / 100) * totalDistance;
-                      return (
-                        <Typography key={percent} variant="caption" color="text.secondary">
-                          {distanceKm.toFixed(0)} km
-        </Typography>
-                      );
-                    })}
-      </Box>
-    );
-  }
-              return null;
-            })()}
-            
-            {/* Elevation markers (Y-axis) */}
-            {(() => {
-              const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
-              const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
-              
-              if (validElevations.length > 0) {
-                const minElev = Math.min(...validElevations);
-                const maxElev = Math.max(...validElevations);
-
-  return (
-                  <Box sx={{ position: 'absolute', top: 0, left: 0, bottom: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', py: 1 }}>
-                    {[0, 25, 50, 75, 100].map(percent => {
-                      const elevation = maxElev - (percent / 100) * (maxElev - minElev);
-                      return (
-                        <Typography key={percent} variant="caption" color="text.secondary">
-                          {elevation.toFixed(0)} m
-          </Typography>
-                      );
-                    })}
-                  </Box>
-                );
-              }
-              return null;
-            })()}
             
             {/* Interactive overlay for mouse events */}
             <Box
@@ -1490,88 +1490,78 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 bottom: 0,
                 cursor: 'crosshair'
               }}
-                             onMouseMove={(e) => {
-                 const rect = e.currentTarget.getBoundingClientRect();
-                 const x = e.clientX - rect.left;
-                 const percentX = (x / rect.width) * 100;
-                 
-                 // Update cursor line
-                 const cursorLine = document.getElementById('elevation-cursor');
-                 if (cursorLine) {
-                   cursorLine.setAttribute('x1', percentX.toString());
-                   cursorLine.setAttribute('x2', percentX.toString());
-                   cursorLine.setAttribute('opacity', '1');
-                 }
-                 
-                 // Update map position and cursor pin
-                 if (mapRef.current && gpxData.tracks.length > 0) {
-                   const track = gpxData.tracks[0];
-                   const allPoints = track.points;
-                   
-                   // Calculate which point corresponds to this distance percentage
-                   if (allPoints.length > 1) {
-                     let totalDistance = 0;
-                     const cumulativeDistances: number[] = [0];
-                     
-                     for (let i = 1; i < allPoints.length; i++) {
-                       const prevPoint = allPoints[i - 1];
-                       const currPoint = allPoints[i];
-                       const distance = calculateDistance(prevPoint, currPoint);
-                       totalDistance += distance;
-                       cumulativeDistances.push(totalDistance);
-                     }
-                     
-                     const targetDistance = (percentX / 100) * totalDistance;
-                     
-                     // Find the closest point to this distance
-                     let closestIndex = 0;
-                     let minDiff = Math.abs(cumulativeDistances[0] - targetDistance);
-                     
-                     for (let i = 1; i < cumulativeDistances.length; i++) {
-                       const diff = Math.abs(cumulativeDistances[i] - targetDistance);
-                       if (diff < minDiff) {
-                         minDiff = diff;
-                         closestIndex = i;
-                       }
-                     }
-                     
-                     const point = allPoints[closestIndex];
-                     
-                     if (point) {
-                       // Set the cursor position for the pin
-                       setElevationCursorPosition([point[0], point[1]]);
-                       
-                       // Smoothly move map to show the position
-                       mapRef.current.setView([point[0], point[1]], mapRef.current.getZoom(), {
-                         animate: true,
-                         duration: 0.3
-                       });
-                     }
-                   }
-                 }
-               }}
-                             onMouseLeave={() => {
-                 // Hide cursor line when mouse leaves
-                 const cursorLine = document.getElementById('elevation-cursor');
-                 if (cursorLine) {
-                   cursorLine.setAttribute('opacity', '0');
-                 }
-                 
-                 // Hide cursor pin
-                 setElevationCursorPosition(null);
-               }}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percentX = (x / rect.width) * 100;
+                
+                // Update cursor line
+                const cursorLine = document.getElementById('elevation-cursor');
+                if (cursorLine) {
+                  cursorLine.setAttribute('x1', percentX.toString());
+                  cursorLine.setAttribute('x2', percentX.toString());
+                  cursorLine.setAttribute('opacity', '1');
+                }
+                
+                // Update map position and cursor pin
+                if (mapRef.current && gpxData.tracks.length > 0) {
+                  const track = gpxData.tracks[0];
+                  const allPoints = track.points;
+                  
+                  // Calculate which point corresponds to this distance percentage
+                  if (allPoints.length > 1) {
+                    let totalDistance = 0;
+                    const cumulativeDistances: number[] = [0];
+                    
+                    for (let i = 1; i < allPoints.length; i++) {
+                      const prevPoint = allPoints[i - 1];
+                      const currPoint = allPoints[i];
+                      const distance = calculateDistance(prevPoint, currPoint);
+                      totalDistance += distance;
+                      cumulativeDistances.push(totalDistance);
+                    }
+                    
+                    const targetDistance = (percentX / 100) * totalDistance;
+                    
+                    // Find the closest point to this distance
+                    let closestIndex = 0;
+                    let minDiff = Math.abs(cumulativeDistances[0] - targetDistance);
+                    
+                    for (let i = 1; i < cumulativeDistances.length; i++) {
+                      const diff = Math.abs(cumulativeDistances[i] - targetDistance);
+                      if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIndex = i;
+                      }
+                    }
+                    
+                    const point = allPoints[closestIndex];
+                    
+                    if (point) {
+                      // Set the cursor position for the pin
+                      setElevationCursorPosition([point[0], point[1]]);
+                      
+                      // Smoothly move map to show the position
+                      mapRef.current.setView([point[0], point[1]], mapRef.current.getZoom(), {
+                        animate: true,
+                        duration: 0.3
+                      });
+                    }
+                  }
+                }
+              }}
+              onMouseLeave={() => {
+                // Hide cursor line when mouse leaves
+                const cursorLine = document.getElementById('elevation-cursor');
+                if (cursorLine) {
+                  cursorLine.setAttribute('opacity', '0');
+                }
+                
+                // Hide cursor pin
+                setElevationCursorPosition(null);
+              }}
             />
-      </Box>
-
-          {/* <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              <strong>Interpretare:</strong> Linia verde arată variația de elevație de-a lungul traseului. 
-              Zonele mai înalte sunt reprezentate prin vârfuri, iar zonele mai joase prin văi.
-          </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              <strong>Interactiv:</strong> Mută cursorul pe grafic pentru a vedea poziția pe hartă.
-            </Typography>
-          </Box> */}
+          </Box>
         </Paper>
         )}
 
