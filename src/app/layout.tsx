@@ -3,8 +3,17 @@
 import './globals.css'
 import Script from 'next/script'
 import ScrollToTop from '@/components/ScrollToTop'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+
+// Create a theme instance
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+  },
+})
 
 export default function RootLayout({
   children,
@@ -32,8 +41,11 @@ export default function RootLayout({
         </Script>
       </head>
       <body>
-        {children}
-        <ScrollToTop />
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          {children}
+          <ScrollToTop />
+        </ThemeProvider>
       </body>
     </html>
   )

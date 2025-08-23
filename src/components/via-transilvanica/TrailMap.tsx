@@ -232,7 +232,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
   // Safe icon creation function
   const createIcon = (iconUrl: string, size: [number, number], anchor: [number, number], popupAnchor: [number, number]) => {
-    if (typeof window !== 'undefined' && (window as any).L) {
+    if (leafletLoaded && (window as any).L) {
       return new (window as any).L.Icon({
         iconUrl,
         iconSize: size,
@@ -256,7 +256,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   };
 
   const fitBounds = () => {
-    if (mapRef.current && gpxData && typeof window !== 'undefined') {
+    if (mapRef.current && gpxData && leafletLoaded) {
       const allPoints = [
         ...gpxData.waypoints.map(wp => [wp.lat, wp.lng] as [number, number]),
         ...gpxData.tracks.flatMap(track => track.points)
@@ -279,7 +279,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   }
 
   return (
-    <Box sx={{ width: '100%', height: 500, position: 'relative' }}>
+    <Box sx={{ width: '100%', position: 'relative' }}>
       {/* Map controls */}
       <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, display: 'flex', gap: 1 }}>
         {/* <Button
@@ -312,70 +312,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
       </Box>
 
-      {/* Progress overlay */}
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 10,
-          left: 10,
-          backgroundColor: 'rgba(255,255,255,0.9)',
-          padding: 2,
-          borderRadius: 1,
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          zIndex: 1000,
-          maxWidth: 300
-        }}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-          {progress.toFixed(1)}% complet
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {completedDistance} / 1400 km
-        </Typography>
-        
-        {gpxLoading && (
-          <Typography variant="caption" display="block" color="primary">
-            Loading GPX file...
-          </Typography>
-        )}
-        
-        {gpxError && (
-          <Typography variant="caption" display="block" color="error">
-            GPX Error: {gpxError}
-          </Typography>
-        )}
-        
-        {gpxData && !gpxLoading && !gpxError && (
-          <Typography variant="caption" display="block" color="success.main">
-            GPX loaded: {gpxData.tracks.length} tracks
-          </Typography>
-        )}
-        
-        {/* Elevation summary */}
-        {gpxData && gpxData.tracks.length > 0 && (() => {
-          const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
-          const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
-          
-          if (validElevations.length > 0) {
-            const minElev = Math.min(...validElevations);
-            const maxElev = Math.max(...validElevations);
-            return (
-              <Typography variant="caption" display="block" color="info.main">
-                📈 Elevație: {minElev.toFixed(0)}m - {maxElev.toFixed(0)}m
-              </Typography>
-            );
-          }
-          return null;
-        })()}
-        
-        {currentLocationPoint && (
-          <Typography variant="caption" display="block" color="info.main">
-            📍 Garmin: {new Date(currentLocationPoint.timestamp).toLocaleTimeString('ro-RO')} - {currentLocationPoint.lat.toFixed(4)}, {currentLocationPoint.lng.toFixed(4)}
-          </Typography>
-        )}
-        
 
-      </Box>
 
 
 
@@ -383,13 +320,76 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       <MapContainer
         center={currentLocationPoint ? [currentLocationPoint.lat, currentLocationPoint.lng] : [currentLocation.lat, currentLocation.lng]}
         zoom={8}
-        style={{ height: '100%', width: '100%' }}
+        style={{ height: '500px', width: '100%' }}
         ref={mapRef}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Progress overlay */}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 10,
+            left: 10,
+            backgroundColor: 'rgba(255,255,255,0.9)',
+            padding: 2,
+            borderRadius: 1,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            zIndex: 1000,
+            maxWidth: 300
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+            {progress.toFixed(1)}% complet
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {completedDistance} / 1400 km
+          </Typography>
+          
+          {gpxLoading && (
+            <Typography variant="caption" display="block" color="primary">
+              Loading GPX file...
+            </Typography>
+          )}
+          
+          {gpxError && (
+            <Typography variant="caption" display="block" color="error">
+              GPX Error: {gpxError}
+            </Typography>
+          )}
+          
+          {gpxData && !gpxLoading && !gpxError && (
+            <Typography variant="caption" display="block" color="success.main">
+              GPX loaded: {gpxData.tracks.length} tracks
+            </Typography>
+          )}
+          
+          {/* Elevation summary */}
+          {gpxData && gpxData.tracks.length > 0 && (() => {
+            const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
+            const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
+            
+            if (validElevations.length > 0) {
+              const minElev = Math.min(...validElevations);
+              const maxElev = Math.max(...validElevations);
+              return (
+                <Typography variant="caption" display="block" color="info.main">
+                  📈 Elevație: {minElev.toFixed(0)}m - {maxElev.toFixed(0)}m
+                </Typography>
+              );
+            }
+            return null;
+          })()}
+          
+          {currentLocationPoint && (
+            <Typography variant="caption" display="block" color="info.main">
+              📍 Locația curentă: {new Date(currentLocationPoint.timestamp).toLocaleTimeString('ro-RO')} - {currentLocationPoint.lat.toFixed(4)}, {currentLocationPoint.lng.toFixed(4)}
+            </Typography>
+          )}
+        </Box>
 
         {/* Uploaded GPX tracks */}
         {uploadedTracks.map((track, trackIndex) => (
