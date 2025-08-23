@@ -11,6 +11,7 @@ import { WaypointService } from '../../lib/waypointService';
 import { AdminAuthService } from '../../lib/adminAuthService';
 import { locationService, LocationPoint } from '../../lib/locationService';
 import WaypointForm from './WaypointForm';
+import ElevationProfile from './ElevationProfile';
 
 interface TrailMapProps {
   currentLocation: { lat: number; lng: number };
@@ -196,7 +197,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       
       try {
         console.log('Loading GPX file...');
-        const response = await fetch('/gpx/via-transilvanica.gpx');
+        const response = await fetch('/gpx/Via-Transilvanica-Traseu.gpx');
         
         if (response.ok) {
           const gpxContent = await response.text();
@@ -346,9 +347,26 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         
         {gpxData && !gpxLoading && !gpxError && (
           <Typography variant="caption" display="block" color="success.main">
-            GPX loaded: {gpxData.tracks.length} tracks, {gpxData.waypoints.length} waypoints
+            GPX loaded: {gpxData.tracks.length} tracks
           </Typography>
         )}
+        
+        {/* Elevation summary */}
+        {gpxData && gpxData.tracks.length > 0 && (() => {
+          const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
+          const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
+          
+          if (validElevations.length > 0) {
+            const minElev = Math.min(...validElevations);
+            const maxElev = Math.max(...validElevations);
+            return (
+              <Typography variant="caption" display="block" color="info.main">
+                📈 Elevație: {minElev.toFixed(0)}m - {maxElev.toFixed(0)}m
+              </Typography>
+            );
+          }
+          return null;
+        })()}
         
         {currentLocationPoint && (
           <Typography variant="caption" display="block" color="info.main">
@@ -423,35 +441,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           />
         ))}
 
-        {/* Uploaded GPX waypoints */}
-        {gpxData?.waypoints.map((waypoint, index) => (
-          <Marker 
-            key={`waypoint-${index}`}
-            position={[waypoint.lat, waypoint.lng]}
-            icon={createIcon(
-              'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiMzRjk5RjUiLz4KPHBhdGggZD0iTTEyIDEzQzEzLjY2IDEzIDE1IDExLjY2IDE1IDEwQzE1IDguMzQgMTMuNjYgNyAxMiA3QzEwLjM0IDcgOSA4LjM0IDkgMTBDOSAxMS42NiAxMC4zNCAxMyAxMiAxM1oiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
-              [20, 20],
-              [10, 10],
-              [0, -10]
-            )}
-          >
-            <Popup>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                {waypoint.name || `Waypoint ${index + 1}`}
-              </Typography>
-              {waypoint.description && (
-                <Typography variant="caption" display="block">
-                  {waypoint.description}
-                </Typography>
-              )}
-              {waypoint.elevation && (
-                <Typography variant="caption" display="block">
-                  Elevation: {waypoint.elevation}m
-                </Typography>
-              )}
-            </Popup>
-          </Marker>
-        ))}
+
 
         {/* Start marker */}
         {startPoint && (
@@ -616,6 +606,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
       </MapContainer>
 
+      {/* Elevation Profile */}
+      {gpxData && gpxData.tracks.length > 0 && (
+        <ElevationProfile tracks={gpxData.tracks} height={250} />
+      )}
+
       {/* Legend */}
       <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -636,10 +631,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               <Box sx={{ width: 12, height: 12, backgroundColor: '#ff6b35' }} />
               <Typography variant="caption">GPX Track</Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 12, height: 12, backgroundColor: '#3F99F5', borderRadius: '50%' }} />
-              <Typography variant="caption">GPX Waypoint</Typography>
-            </Box>
+
             {isAdmin && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50' }} />
@@ -661,6 +653,14 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               <Typography variant="caption">Finish/Start</Typography>
             </Box>
           </>
+        )}
+        
+        {/* Elevation profile legend */}
+        {gpxData && gpxData.tracks.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50', borderRadius: '50%' }} />
+            <Typography variant="caption">Profil Elevație</Typography>
+          </Box>
         )}
       </Box>
 
