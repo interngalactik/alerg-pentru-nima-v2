@@ -46,6 +46,12 @@ export class LocationService {
     return [];
   }
 
+  // Get the latest location point (most recent)
+  async getLatestLocation(): Promise<LocationPoint | null> {
+    const locations = await this.getLocations();
+    return locations.length > 0 ? locations[locations.length - 1] : null;
+  }
+
   // Listen to location updates in real-time
   onLocationsUpdate(callback: (locations: LocationPoint[]) => void): () => void {
     const locationsRef = ref(database, 'locations');
@@ -58,6 +64,25 @@ export class LocationService {
         callback(sortedLocations);
       } else {
         callback([]);
+      }
+    });
+
+    return () => off(locationsRef, 'value', unsubscribe);
+  }
+
+  // Listen to latest location updates in real-time
+  onLatestLocationUpdate(callback: (latestLocation: LocationPoint | null) => void): () => void {
+    const locationsRef = ref(database, 'locations');
+    
+    const unsubscribe = onValue(locationsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const locations: LocationPoint[] = Object.values(data || {});
+        const sortedLocations = locations.sort((a, b) => a.timestamp - b.timestamp);
+        const latest = sortedLocations.length > 0 ? sortedLocations[sortedLocations.length - 1] : null;
+        callback(latest);
+      } else {
+        callback(null);
       }
     });
 

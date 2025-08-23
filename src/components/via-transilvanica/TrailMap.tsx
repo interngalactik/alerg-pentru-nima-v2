@@ -4,13 +4,13 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Box, Typography, Paper, Button } from '@mui/material';
 import { LocationOn, Add as AddIcon } from '@mui/icons-material';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import L from 'leaflet';
 import { parseGPX, ParsedGPX, GPXTrack } from '@/lib/gpxParser';
 import { Waypoint, WaypointFormData } from '../../types/waypoint';
 import { WaypointService } from '../../lib/waypointService';
 import { AdminAuthService } from '../../lib/adminAuthService';
-import WaypointMarker from './WaypointMarker';
+import { locationService, LocationPoint } from '../../lib/locationService';
 import WaypointForm from './WaypointForm';
-import WaypointDisplay from './WaypointDisplay';
 
 interface TrailMapProps {
   currentLocation: { lat: number; lng: number };
@@ -27,11 +27,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [gpxLoading, setGpxLoading] = useState(false);
   const [gpxError, setGpxError] = useState<string | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
-  const [selectedWaypoint, setSelectedWaypoint] = useState<Waypoint | null>(null);
   const [showWaypointForm, setShowWaypointForm] = useState(false);
   const [editingWaypoint, setEditingWaypoint] = useState<Waypoint | null>(null);
   const [formCoordinates, setFormCoordinates] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentLocationPoint, setCurrentLocationPoint] = useState<LocationPoint | null>(null);
   const mapRef = useRef<any>(null);
 
   // Get all route points from GPX tracks
@@ -99,10 +99,34 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     };
   }, []);
 
+  // Track current location from Garmin InReach
+  useEffect(() => {
+    const loadInitialLocation = async () => {
+      try {
+        const latestLocation = await locationService.getLatestLocation();
+        setCurrentLocationPoint(latestLocation);
+      } catch (error) {
+        console.error('Error loading initial location:', error);
+      }
+    };
+
+    // Load initial location
+    loadInitialLocation();
+
+    // Subscribe to real-time location updates
+    const unsubscribe = locationService.onLatestLocationUpdate((latestLocation) => {
+      console.log('Current location updated:', latestLocation);
+      if (latestLocation) {
+        console.log('Setting current location point:', latestLocation.lat, latestLocation.lng);
+      }
+      setCurrentLocationPoint(latestLocation);
+    });
+
+    return unsubscribe;
+  }, []);
+
   // Waypoint management functions
-  const handleWaypointClick = (waypoint: Waypoint) => {
-    setSelectedWaypoint(waypoint);
-  };
+  // Waypoint click is now handled directly in the popup
 
   const handleAddWaypoint = (data: WaypointFormData) => {
     console.log('handleAddWaypoint called with:', data);
@@ -130,13 +154,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const handleWaypointEdit = (waypoint: Waypoint) => {
     setEditingWaypoint(waypoint);
     setShowWaypointForm(true);
-    setSelectedWaypoint(null);
   };
 
   const handleWaypointDelete = async (waypointId: string) => {
     try {
       await WaypointService.deleteWaypoint(waypointId);
-      setSelectedWaypoint(null);
     } catch (error) {
       console.error('Error deleting waypoint:', error);
     }
@@ -226,6 +248,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     }
   };
 
+  const centerOnCurrentLocation = () => {
+    if (mapRef.current && currentLocationPoint) {
+      mapRef.current.setView([currentLocationPoint.lat, currentLocationPoint.lng], 12);
+    }
+  };
+
   const fitBounds = () => {
     if (mapRef.current && gpxData && typeof window !== 'undefined') {
       const allPoints = [
@@ -253,21 +281,31 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     <Box sx={{ width: '100%', height: 500, position: 'relative' }}>
       {/* Map controls */}
       <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, display: 'flex', gap: 1 }}>
-        <Button
+        {/* <Button
           variant="contained"
           onClick={centerMap}
           startIcon={<LocationOn />}
           sx={{ backgroundColor: 'white', color: 'var(--blue)', boxShadow: 2 }}
         >
           Center
-        </Button>
+        </Button> */}
+        {currentLocationPoint && (
+          <Button
+            variant="contained"
+            onClick={centerOnCurrentLocation}
+            startIcon={<LocationOn />}
+            sx={{ backgroundColor: '#f44336', color: 'white', boxShadow: 2 }}
+          >
+            Locația curentă
+          </Button>
+        )}
         {gpxData && (
           <Button
             variant="contained"
             onClick={fitBounds}
             sx={{ backgroundColor: 'white', color: 'var(--blue)', boxShadow: 2 }}
           >
-            Fit Route
+            Ajustează harta
           </Button>
         )}
 
@@ -311,13 +349,21 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             GPX loaded: {gpxData.tracks.length} tracks, {gpxData.waypoints.length} waypoints
           </Typography>
         )}
+        
+        {currentLocationPoint && (
+          <Typography variant="caption" display="block" color="info.main">
+            📍 Garmin: {new Date(currentLocationPoint.timestamp).toLocaleTimeString('ro-RO')} - {currentLocationPoint.lat.toFixed(4)}, {currentLocationPoint.lng.toFixed(4)}
+          </Typography>
+        )}
+        
+
       </Box>
 
 
 
       {/* Map Container */}
       <MapContainer
-        center={[currentLocation.lat, currentLocation.lng]}
+        center={currentLocationPoint ? [currentLocationPoint.lat, currentLocationPoint.lng] : [currentLocation.lat, currentLocation.lng]}
         zoom={8}
         style={{ height: '100%', width: '100%' }}
         ref={mapRef}
@@ -449,33 +495,122 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           </Popup>
         </Marker>
 
-        {/* Current location marker */}
-        <Marker 
-          position={[currentLocation.lat, currentLocation.lng]}
-          icon={createIcon(
-            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiNGNDQzMzYiLz4KPHBhdGggZD0iTTEyIDEzQzEzLjY2IDEzIDE1IDExLjY2IDE1IDEwQzE1IDguMzQgMTMuNjYgNyAxMiA3QzEwLjM0IDcgOSA4LjM0IDkgMTBDOSAxMS42NiAxMC4zNCAxMyAxMiAxM1oiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
-            [24, 24],
-            [12, 12],
-            [0, -12]
-          )}
-        >
-          <Popup>
-            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-              Locația ta
-            </Typography>
-            <Typography variant="caption">
-              {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
-            </Typography>
-          </Popup>
-        </Marker>
+        {/* Current location marker from Garmin InReach */}
+        {currentLocationPoint && (
+          <Marker 
+            key={`current-location-${currentLocationPoint.timestamp}`}
+            position={[currentLocationPoint.lat, currentLocationPoint.lng]}
+            icon={L.divIcon({
+              html: '<div style="background-color: #f44336; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
+              className: 'current-location-marker',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8]
+            })}
+          >
+            <Popup>
+              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                Locația curentă (Garmin InReach)
+              </Typography>
+              <Typography variant="caption">
+                {currentLocationPoint.lat.toFixed(4)}, {currentLocationPoint.lng.toFixed(4)}
+              </Typography>
+              {currentLocationPoint.timestamp && (
+                <Typography variant="caption" display="block">
+                  Actualizat: {new Date(currentLocationPoint.timestamp).toLocaleString('ro-RO')}
+                </Typography>
+              )}
+              {currentLocationPoint.accuracy && (
+                <Typography variant="caption" display="block">
+                  Precizie: ±{currentLocationPoint.accuracy}m
+                </Typography>
+              )}
+            </Popup>
+          </Marker>
+        )}
 
-        {/* Waypoint markers */}
+        {/* Waypoint markers with popups */}
         {waypoints.map((waypoint) => (
-          <WaypointMarker
+          <Marker
             key={waypoint.id}
-            waypoint={waypoint}
-            onClick={handleWaypointClick}
-          />
+            position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
+            icon={L.divIcon({
+              html: `<div style="background-color: ${waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4'}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${waypoint.type === 'finish-start' ? '🏁' : '📍'}</div>`,
+              className: 'waypoint-marker',
+              iconSize: [16, 16],
+              iconAnchor: [8, 8]
+            })}
+          >
+            <Popup>
+              <Box sx={{ minWidth: 200 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                  {waypoint.name}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Box
+                    sx={{
+                      backgroundColor: waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4',
+                      color: 'white',
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    {waypoint.type === 'finish-start' ? 'Finish/Start' : 'Intermediar'}
+                  </Box>
+                </Box>
+                
+                {waypoint.details && (
+                  <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+                    {waypoint.details}
+                  </Typography>
+                )}
+                
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                  Coordonate: {waypoint.coordinates.lat.toFixed(4)}, {waypoint.coordinates.lng.toFixed(4)}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      const url = `https://www.google.com/maps?q=${waypoint.coordinates.lat},${waypoint.coordinates.lng}`;
+                      window.open(url, '_blank');
+                    }}
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    🗺️ Google Maps
+                  </Button>
+                  
+                  {isAdmin && (
+                    <>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => handleWaypointEdit(waypoint)}
+                        sx={{ fontSize: '0.75rem' }}
+                      >
+                        ✏️ Editează
+                      </Button>
+                      
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        onClick={() => handleWaypointDelete(waypoint.id)}
+                        sx={{ fontSize: '0.75rem' }}
+                      >
+                        🗑️ Șterge
+                      </Button>
+                    </>
+                  )}
+                </Box>
+              </Box>
+            </Popup>
+          </Marker>
         ))}
 
 
@@ -489,7 +624,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 12, height: 12, backgroundColor: '#f44336', borderRadius: '50%' }} />
-          <Typography variant="caption">Locația ta</Typography>
+          <Typography variant="caption">Locația curentă (Garmin)</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 12, height: 12, backgroundColor: '#ff6600', borderRadius: '50%' }} />
@@ -542,16 +677,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         coordinates={editingWaypoint?.coordinates || formCoordinates}
       />
 
-      {/* Waypoint Display Dialog */}
-      {selectedWaypoint && (
-        <WaypointDisplay
-          waypoint={selectedWaypoint}
-          isAdmin={isAdmin}
-          onEdit={handleWaypointEdit}
-          onDelete={handleWaypointDelete}
-          onClose={() => setSelectedWaypoint(null)}
-        />
-      )}
+
     </Box>
   );
 };
