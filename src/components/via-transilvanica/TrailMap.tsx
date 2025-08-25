@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Box, Typography, Paper, Button, CircularProgress } from '@mui/material';
 import { LocationOn, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
@@ -38,8 +38,10 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [gpxLoading, setGpxLoading] = useState(false);
   const [gpxError, setGpxError] = useState<string | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [waypointsTimestamp, setWaypointsTimestamp] = useState<number>(Date.now());
   const [showWaypointForm, setShowWaypointForm] = useState(false);
   const [editingWaypoint, setEditingWaypoint] = useState<Waypoint | null>(null);
+  const [isCoordinateSelectionMode, setIsCoordinateSelectionMode] = useState(false);
   const [formCoordinates, setFormCoordinates] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentLocationPoint, setCurrentLocationPoint] = useState<LocationPoint | null>(null);
@@ -211,41 +213,100 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       .map(({ trackIndex, ...waypoint }) => waypoint); // Remove trackIndex from final result
   }, [waypoints, gpxData]);
 
-  // Calculate distance from the last waypoint on the map or from start point
-  const calculateDistanceFromLastWaypoint = (currentWaypointIndex: number): { distance: number; fromName: string } => {
+  // Calculate distance from last waypoint or start
+  const calculateDistanceFromLastWaypoint = useCallback((waypointIndex: number) => {
     if (!sortedWaypoints.length) return { distance: 0, fromName: '' };
     
-    const currentWaypoint = sortedWaypoints[currentWaypointIndex];
+    const currentWaypoint = sortedWaypoints[waypointIndex];
     
-    // For the first waypoint, calculate distance from start point
-    if (currentWaypointIndex === 0) {
-      if (startPoint) {
-        const currentLatLng: [number, number] = [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng];
-        const startLatLng: [number, number] = [startPoint[0], startPoint[1]];
-        const distance = calculateTrackDistanceBetweenPoints(startLatLng, currentLatLng);
-        return { distance, fromName: 'Start' };
+    if (waypointIndex === 0) {
+      // First waypoint - calculate from start of GPX track
+      if (gpxData && gpxData.tracks.length > 0) {
+        const track = gpxData.tracks[0];
+        if (track.points.length > 0) {
+          const startPoint = track.points[0];
+          const distance = calculateTrackDistanceBetweenPoints(
+            [startPoint[0], startPoint[1]],
+            [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng]
+          );
+          return { distance, fromName: 'Start' };
+        }
       }
-      return { distance: 0, fromName: '' };
+      return { distance: 0, fromName: 'Start' };
     }
     
     // For other waypoints, calculate from previous waypoint
-    const previousWaypoint = sortedWaypoints[currentWaypointIndex - 1];
-    if (!previousWaypoint) {
-      if (startPoint) {
-        const currentLatLng: [number, number] = [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng];
-        const startLatLng: [number, number] = [startPoint[0], startPoint[1]];
-        const distance = calculateTrackDistanceBetweenPoints(startLatLng, currentLatLng);
-        return { distance, fromName: 'Start' };
+    const previousWaypoint = sortedWaypoints[waypointIndex - 1];
+    const distance = calculateTrackDistanceBetweenPoints(
+      [previousWaypoint.coordinates.lat, previousWaypoint.coordinates.lng],
+      [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng]
+    );
+    return { distance, fromName: previousWaypoint.name };
+  }, [sortedWaypoints, gpxData]);
+
+  // Calculate elevation gain between two points along the GPX track
+  const calculateElevationGain = useCallback((startPoint: [number, number], endPoint: [number, number]) => {
+    if (!gpxData || gpxData.tracks.length === 0) return 0;
+    
+    const track = gpxData.tracks[0];
+    const allPoints = track.points;
+    const allElevations = track.elevation || [];
+    
+    if (allPoints.length === 0 || allElevations.length === 0) return 0;
+    
+    // Find the closest GPX points to our start and end coordinates
+    let startIndex = 0;
+    let endIndex = allPoints.length - 1;
+    let startMinDistance = Infinity;
+    let endMinDistance = Infinity;
+    
+    allPoints.forEach((point, index) => {
+      const startDist = calculateDistance([point[0], point[1]], startPoint);
+      const endDist = calculateDistance([point[0], point[1]], endPoint);
+      
+      if (startDist < startMinDistance) {
+        startMinDistance = startDist;
+        startIndex = index;
       }
-      return { distance: 0, fromName: '' };
+      if (endDist < endMinDistance) {
+        endMinDistance = endDist;
+        endIndex = index;
+      }
+    });
+    
+    // Ensure startIndex is before endIndex
+    if (startIndex > endIndex) {
+      [startIndex, endIndex] = [endIndex, startIndex];
     }
     
-    const currentLatLng: [number, number] = [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng];
-    const previousLatLng: [number, number] = [previousWaypoint.coordinates.lat, previousWaypoint.coordinates.lng];
+    // Calculate cumulative elevation gain between these points
+    let elevationGain = 0;
+    for (let i = startIndex + 1; i <= endIndex; i++) {
+      if (i < allElevations.length && i - 1 < allElevations.length) {
+        const currentElev = allElevations[i];
+        const prevElev = allElevations[i - 1];
+        
+        if (typeof currentElev === 'number' && typeof prevElev === 'number' && !isNaN(currentElev) && !isNaN(prevElev)) {
+          const elevationDiff = currentElev - prevElev;
+          if (elevationDiff > 0) {
+            elevationGain += elevationDiff;
+          }
+        }
+      }
+    }
     
-    const distance = calculateTrackDistanceBetweenPoints(previousLatLng, currentLatLng);
-    return { distance, fromName: previousWaypoint.name };
-  };
+    return elevationGain;
+  }, [gpxData]);
+
+  // Calculate elevation gain from current location to a waypoint
+  const calculateElevationGainFromCurrentLocation = useCallback((waypointCoordinates: { lat: number; lng: number }) => {
+    if (!currentLocationPoint) return 0;
+    
+    return calculateElevationGain(
+      [currentLocationPoint.lat, currentLocationPoint.lng],
+      [waypointCoordinates.lat, waypointCoordinates.lng]
+    );
+  }, [currentLocationPoint, calculateElevationGain]);
 
   // Check if current location has passed a waypoint
   const hasPassedWaypoint = (waypointCoordinates: { lat: number; lng: number }): boolean => {
@@ -433,6 +494,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       }
       
       setWaypoints(validWaypoints);
+      setWaypointsTimestamp(Date.now()); // Force re-render of waypoint markers
     });
 
     return unsubscribe;
@@ -501,6 +563,18 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       } else {
         await WaypointService.addWaypoint(data);
       }
+      
+      // Refresh waypoints to show updated coordinates on the map
+      setTimeout(async () => {
+        try {
+          const refreshedWaypoints = await WaypointService.getAllWaypoints();
+          setWaypoints(refreshedWaypoints);
+          setWaypointsTimestamp(Date.now()); // Force re-render of waypoint markers
+        } catch (refreshError) {
+          console.error('Error refreshing waypoints:', refreshError);
+        }
+      }, 100); // Small delay to ensure Firebase update is processed
+      
       setShowWaypointForm(false);
       setEditingWaypoint(null);
     } catch (error) {
@@ -528,14 +602,15 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       await WaypointService.deleteWaypoint(waypointId);
       
       // Force refresh waypoints to ensure proper ordering
-        setTimeout(async () => {
-          try {
-            const refreshedWaypoints = await WaypointService.getAllWaypoints();
-            setWaypoints(refreshedWaypoints);
-          } catch (refreshError) {
-            console.error('Error refreshing waypoints:', refreshError);
-          }
-        }, 100); // Small delay to ensure Firebase update is processed
+      setTimeout(async () => {
+        try {
+          const refreshedWaypoints = await WaypointService.getAllWaypoints();
+          setWaypoints(refreshedWaypoints);
+          setWaypointsTimestamp(Date.now()); // Force re-render of waypoint markers
+        } catch (refreshError) {
+          console.error('Error refreshing waypoints:', refreshError);
+        }
+      }, 100); // Small delay to ensure Firebase update is processed
       
     } catch (error) {
       console.error('Error deleting waypoint:', error);
@@ -730,10 +805,24 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       />
 
       {/* Map Click Handler for Coordinate Selection */}
-      {showWaypointForm || editingWaypoint ? (
+      {(showWaypointForm || editingWaypoint || isCoordinateSelectionMode) ? (
         <MapClickHandler
           onMapClick={(lat, lng) => {
             setFormCoordinates({ lat, lng });
+            // If editing a waypoint, update its coordinates
+            if (editingWaypoint) {
+              setEditingWaypoint({
+                ...editingWaypoint,
+                coordinates: { lat, lng }
+              });
+            }
+            
+            // If in coordinate selection mode, automatically return to form
+            if (isCoordinateSelectionMode) {
+              setIsCoordinateSelectionMode(false);
+              setShowWaypointForm(true);
+            }
+            
             // console.log('Map clicked for coordinate selection:', { lat, lng });
           }}
         />
@@ -1115,7 +1204,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           )
           .map((waypoint, index) => (
         <Marker 
-            key={waypoint.id}
+            key={`${waypoint.id}-${waypointsTimestamp}`}
             position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
             icon={L.divIcon({
               html: `<div style="background-color: ${waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4'}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${index + 1}</div>`,
@@ -1185,18 +1274,46 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   
                   return (
                     <>
-                      {/* Distance from current location - only show if not passed */}
+                      {/* Distance and Elevation from current location - only show if not passed */}
                       {currentLocationPoint && !hasPassed && (
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontStyle: 'italic' }}>
-                          <strong>Distanță de la locația curentă:</strong> {calculateDistanceToWaypoint(waypoint.coordinates).toFixed(2)} km
-                        </Typography>
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                            <strong>Distanță de la locația curentă:</strong> {calculateDistanceToWaypoint(waypoint.coordinates).toFixed(2)} km
+                          </Typography>
+                          {(() => {
+                            const elevationGainFromCurrent = calculateElevationGainFromCurrentLocation(waypoint.coordinates);
+                            return elevationGainFromCurrent > 0 ? (
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                                <strong>Urcare de la locația curentă:</strong> {elevationGainFromCurrent.toFixed(0)} m
+                              </Typography>
+                            ) : null;
+                          })()}
+                        </Box>
                       )}
                       
-                      {/* Distance from previous waypoint or start */}
+                      {/* Distance and Elevation from previous waypoint or start */}
                       {distanceInfo.distance > 0 && (
-                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, fontStyle: 'italic' }}>
-                          <strong>Distanță de la {distanceInfo.fromName === 'Start' ? 'start' : `punctul ${distanceInfo.fromName}`}:</strong> {distanceInfo.distance.toFixed(2)} km
-                        </Typography>
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                            <strong>Distanță de la {distanceInfo.fromName === 'Start' ? 'start' : `punctul ${distanceInfo.fromName}`}:</strong> {distanceInfo.distance.toFixed(2)} km
+                          </Typography>
+                          {(() => {
+                            const elevationGainFromPrevious = index > 0 
+                              ? calculateElevationGain(
+                                  [sortedWaypoints[index - 1].coordinates.lat, sortedWaypoints[index - 1].coordinates.lng],
+                                  [waypoint.coordinates.lat, waypoint.coordinates.lng]
+                                )
+                              : calculateElevationGain(
+                                  [gpxData?.tracks[0]?.points[0]?.[0] || 0, gpxData?.tracks[0]?.points[0]?.[1] || 0],
+                                  [waypoint.coordinates.lat, waypoint.coordinates.lng]
+                                );
+                            return elevationGainFromPrevious > 0 ? (
+                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                                <strong>Urcare de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1].name}`}:</strong> {elevationGainFromPrevious.toFixed(0)} m
+                              </Typography>
+                            ) : null;
+                          })()}
+                        </Box>
                       )}
                       
                       {/* Show if waypoint has been passed */}
@@ -1205,9 +1322,13 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                           ✅ <strong>Etapă completată</strong>
                         </Typography>
                       )}
+                      
+
                     </>
                   );
                 })()}
+                
+
                 
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
                   Coordonate: {waypoint.coordinates.lat.toFixed(4)}, {waypoint.coordinates.lng.toFixed(4)}
@@ -1232,7 +1353,17 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                         size="small"
                         variant="outlined"
                         color="primary"
-                        onClick={() => handleWaypointEdit(waypoint)}
+                        onClick={() => {
+                          // Close the popup when editing
+                          const popup = document.querySelector('.leaflet-popup');
+                          if (popup) {
+                            const closeButton = popup.querySelector('.leaflet-popup-close-button');
+                            if (closeButton) {
+                              (closeButton as HTMLElement).click();
+                            }
+                          }
+                          handleWaypointEdit(waypoint);
+                        }}
                         sx={{ fontSize: '0.75rem' }}
                       >
                         ✏️ Editează
@@ -1335,14 +1466,23 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           {/* Interactive Elevation Chart */}
           <Box sx={{ width: '100%', height: 250, position: 'relative', overflow: 'hidden' }}>
             <svg
+              id="elevation-chart"
               width="100%"
               height="100%"
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
               style={{ position: 'absolute', top: 0, left: 0 }}
             >
-              {/* Grid lines */}
+              {/* Gradient definitions - must be defined before use */}
               <defs>
+                <linearGradient id="completedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#4caf50" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="#4caf50" stopOpacity="0.1" />
+                </linearGradient>
+                <linearGradient id="remainingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ff6b35" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="#ff6b35" stopOpacity="0.1" />
+                </linearGradient>
                 <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
                   <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#f0f0f0" strokeWidth="0.5" />
                 </pattern>
@@ -1453,18 +1593,6 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 return null;
               })()}
               
-              {/* Gradient definitions */}
-              <defs>
-                <linearGradient id="completedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#4caf50" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="#4caf50" stopOpacity="0.1" />
-                </linearGradient>
-                <linearGradient id="remainingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#ff6b35" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="#ff6b35" stopOpacity="0.1" />
-                </linearGradient>
-              </defs>
-              
               {/* Interactive cursor line */}
               <line
                 id="elevation-cursor"
@@ -1521,6 +1649,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                       cumulativeDistances.push(totalDistance);
                     }
                     
+                    // Convert percentage to distance
                     const targetDistance = (percentX / 100) * totalDistance;
                     
                     // Find the closest point to this distance
@@ -1618,11 +1747,24 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         )}
         
         {/* Coordinate Selection Mode Indicator */}
-        {(showWaypointForm || editingWaypoint) && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'warning.light', borderRadius: 1 }}>
-            <Box sx={{ width: 12, height: 12, backgroundColor: '#ff9800', borderRadius: '50%' }} />
-            <Typography variant="caption" sx={{ color: 'warning.contrastText' }}>
-              Mod selectare coordonate - Click pe hartă sau pe traseu pentru precizie
+        {isCoordinateSelectionMode && (
+          <Box sx={{ 
+            position: 'absolute', 
+            top: 10, 
+            left: '50%', 
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+            bgcolor: 'warning.light', 
+            p: 2, 
+            borderRadius: 2, 
+            boxShadow: 2,
+            textAlign: 'center'
+          }}>
+            <Typography variant="body2" sx={{ color: 'warning.contrastText', mb: 1, fontWeight: 'bold' }}>
+              Mod selectare coordonate
+            </Typography>
+            <Typography variant="caption" sx={{ color: 'warning.contrastText', display: 'block' }}>
+              Click pe hartă pentru a selecta coordonatele
             </Typography>
           </Box>
         )}
@@ -1635,17 +1777,17 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           setShowWaypointForm(false);
           setEditingWaypoint(null);
           setFormCoordinates({ lat: 0, lng: 0 });
+          setIsCoordinateSelectionMode(false);
         }}
         onSubmit={handleWaypointSubmit}
         initialData={editingWaypoint || undefined}
         coordinates={editingWaypoint?.coordinates || formCoordinates}
         onCoordinateSelect={(coordinates) => {
-          // Update form coordinates when user selects from map
-          setFormCoordinates(coordinates);
-          // Close the form to allow map interaction
+          // Enter coordinate selection mode
+          setIsCoordinateSelectionMode(true);
           setShowWaypointForm(false);
-          // Show a message to click on the map
-          alert('Formularul a fost închis pentru a permite selectarea coordonatelor pe hartă. Click pe hartă pentru a selecta coordonatele, apoi deschide din nou formularul.');
+          // Show instructions for coordinate selection
+          alert('Formularul a fost ascuns pentru a permite selectarea coordonatelor pe hartă. Click pe hartă pentru a selecta coordonatele, apoi apasă din nou butonul "Selectează de pe hartă" pentru a reveni la formular.');
         }}
       />
 
