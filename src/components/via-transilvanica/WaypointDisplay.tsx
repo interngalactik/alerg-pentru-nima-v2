@@ -40,7 +40,7 @@ export default function WaypointDisplay({
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'intermediary': return 'Punct intermediar';
-      case 'finish-start': return 'Finish/Start';
+      case 'finish-start': return 'Sosire/Pornire Etapa';
       default: return type;
     }
   };
@@ -152,7 +152,7 @@ export default function WaypointDisplay({
                 )}
                 {waypoint.startDate && (
                   <Typography variant="body2" sx={{ mb: 1 }}>
-                    <strong>Data de start:</strong> {new Date(waypoint.startDate).toLocaleDateString('ro-RO')}
+                    <strong>Data de pornire:</strong> {new Date(waypoint.startDate).toLocaleDateString('ro-RO')}
                     <Typography variant="caption" color="text.secondary" display="block">
                       Când vei începe următoarea etapă
                     </Typography>

@@ -29,13 +29,15 @@ interface GarminTrackerProps {
   totalDistance: number;
   trackProgress?: { completedDistance: number; totalDistance: number; progressPercentage: number } | null;
   onProgressUpdate?: (progress: TrailProgress) => void;
+  elevationData?: number[];
 }
 
 const GarminTracker: React.FC<GarminTrackerProps> = ({ 
   trailPoints, 
   totalDistance, 
   trackProgress: mapTrackProgress,
-  onProgressUpdate 
+  onProgressUpdate,
+  elevationData
 }) => {
   const [currentLocation, setCurrentLocation] = useState<LocationPoint | null>(null);
   const [progress, setProgress] = useState<TrailProgress | null>(null);
@@ -121,6 +123,39 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     return Math.min((completedDistance / totalDistance) * 100, 100);
   };
 
+  // Calculate elevation gain
+  const getElevationProgress = () => {
+    if (!elevationData || elevationData.length === 0) return { completed: 0, total: 0 };
+    
+    // Calculate total elevation gain
+    let totalElevationGain = 0;
+    for (let i = 1; i < elevationData.length; i++) {
+      const elevationDiff = elevationData[i] - elevationData[i - 1];
+      if (elevationDiff > 0) {
+        totalElevationGain += elevationDiff;
+      }
+    }
+    
+    // Calculate completed elevation gain based on completedPoints (same logic as TrailMap)
+    let completedElevationGain = 0;
+    if (mapTrackProgress?.completedDistance && totalDistance > 0) {
+      // Use the same approach as TrailMap - calculate based on progress ratio
+      const progressRatio = Math.min(mapTrackProgress.completedDistance / totalDistance, 1);
+      const completedPoints = Math.floor(progressRatio * elevationData.length);
+      
+      // Use the length of completed points to determine how many elevation points to include
+      const completedElevations = elevationData.slice(0, completedPoints);
+      
+      for (let i = 1; i < completedElevations.length; i++) {
+        const elevationDiff = completedElevations[i] - completedElevations[i - 1];
+        if (elevationDiff > 0) {
+          completedElevationGain += elevationDiff;
+        }
+      }
+    }
+    
+    return { completed: completedElevationGain, total: totalElevationGain };
+  };
 
 
   if (loading && locations.length === 0) {
@@ -211,6 +246,18 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                 {getCurrentProgress().toFixed(1)}% Complet
               </Typography>
             </Box>
+
+            {/* Elevation Progress */}
+            {elevationData && elevationData.length > 0 && (() => {
+              const elevationProgress = getElevationProgress();
+              return (
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2" sx={{ mr: 1 }}>
+                    📈 Elevație: {elevationProgress.completed.toFixed(0)}m / {elevationProgress.total.toFixed(0)}m
+                  </Typography>
+                </Box>
+              );
+            })()}
 
             {/* ETA calculation removed - not available in new progress system */}
           </Paper>

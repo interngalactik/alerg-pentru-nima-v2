@@ -262,7 +262,7 @@ export default function WaypointForm({
                 onChange={(e) => handleInputChange('type', e.target.value)}
               >
                 <MenuItem value="intermediary">Punct intermediar</MenuItem>
-                <MenuItem value="finish-start">Finish/Start</MenuItem>
+                <MenuItem value="finish-start">Sosire/Pornire Etapa</MenuItem>
               </Select>
             </FormControl>
 

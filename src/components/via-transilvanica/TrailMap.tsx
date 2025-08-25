@@ -745,7 +745,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             variant="contained"
             onClick={centerOnCurrentLocation}
             startIcon={<LocationOn />}
-            sx={{ backgroundColor: 'var(--orange)', color: 'white', boxShadow: 2 }}
+            sx={{ backgroundColor: 'var(--blue)', color: 'white', boxShadow: 2 }}
           >
             Locația curentă
           </Button>
@@ -912,12 +912,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           )} */}
         </Box>
 
-        {/* GPX Track - Completed portion (green) */}
+        {/* GPX Track - Completed portion (orange) */}
         {trackProgress.completedPoints.length > 0 && (
             <Polyline
             key="completed-track"
             positions={trackProgress.completedPoints}
-              color="#4caf50"
+              color="var(--blue)"
             weight={4}
               opacity={0.9}
             eventHandlers={{
@@ -950,7 +950,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                       position: fixed;
                       top: 20px;
                       right: 20px;
-                      background: #4caf50;
+                      background: var(--blue);
                       color: white;
                       padding: 12px 20px;
                       border-radius: 8px;
@@ -981,11 +981,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               },
               mouseover: (e) => {
                 if (isAdmin) {
-                  e.target.setStyle({ weight: 6, color: '#45a049' });
+                  e.target.setStyle({ weight: 6, color: 'var(--blue)' });
                 }
               },
               mouseout: (e) => {
-                e.target.setStyle({ weight: 4, color: '#4caf50' });
+                e.target.setStyle({ weight: 4, color: 'var(--blue)' });
               }
             }}
           />
@@ -1029,7 +1029,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                       position: fixed;
                       top: 20px;
                       right: 20px;
-                      background: #4caf50;
+                      background: var(--orange);
                       color: white;
                       padding: 12px 20px;
                       border-radius: 8px;
@@ -1124,16 +1124,16 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       {startPoint && (
           <Marker 
           position={startPoint}
-            icon={createIcon(
-            'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyQzIgMTcuNTIgNi40OCAyMiAxMiAyMkMxNy41MiAyMiAyMiAxNy41MiAyMiAxMkMyMiA2LjQ4IDE3LjUyIDIgMTIgMloiIGZpbGw9IiM0Y2FmNTAiLz4KPHBhdGggZD0iTTEyIDEzQzEzLjY2IDEzIDE1IDExLjY2IDE1IDEwQzE1IDguMzQgMTMuNjYgNyAxMiA3QzEwLjM0IDcgOSA4LjM0IDkgMTBDOSAxMS42NiAxMC4zNCAxMyAxMiAxM1oiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=',
-            [24, 24],
-            [12, 12],
-            [0, -12]
-            )}
+            icon={L.divIcon({
+              html: '<div style="font-size: 24px; text-align: center; line-height: 24px;">🏳️</div>',
+              className: 'start-marker',
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
+            })}
           >
             <Popup>
               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-              Start - {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
+              Pornire - {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
               </Typography>
               <Typography variant="caption">
               Începutul traseului Via Transilvanica
@@ -1145,16 +1145,16 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       {/* End marker */}
           <Marker 
         position={endPoint}
-            icon={createIcon(
-          'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNmZjY2MDAiLz4KPGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iNCIgZmlsbD0id2hpdGUiLz4KPC9zdmc+',
-          [24, 24],
-          [12, 12],
-          [0, -12]
-            )}
+            icon={L.divIcon({
+              html: '<div style="font-size: 24px; text-align: center; line-height: 24px;">🏁</div>',
+              className: 'destination-marker',
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
+            })}
           >
             <Popup>
               <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-            Destinație - {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
+            Sosire - {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
               </Typography>
               <Typography variant="caption">
             Sfârșitul traseului Via Transilvanica
@@ -1168,7 +1168,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             key={`current-location-${currentLocationPoint.timestamp}`}
             position={[currentLocationPoint.lat, currentLocationPoint.lng]}
             icon={L.divIcon({
-              html: '<div style="background-color: var(--orange); width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
+              html: '<div style="background-color: var(--blue); width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3);"></div>',
               className: 'current-location-marker',
               iconSize: [16, 16],
               iconAnchor: [8, 8]
@@ -1207,7 +1207,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             key={`${waypoint.id}-${waypointsTimestamp}`}
             position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
             icon={L.divIcon({
-              html: `<div style="background-color: ${waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4'}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${index + 1}</div>`,
+              html: `<div style="background-color: ${waypoint.type === 'finish-start' ? 'var(--orange)' : '#4ECDC4'}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${index + 1}</div>`,
               className: 'waypoint-marker',
               iconSize: [20, 20],
               iconAnchor: [10, 10]
@@ -1222,7 +1222,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <Box
                     sx={{
-                      backgroundColor: waypoint.type === 'finish-start' ? '#FF6B35' : '#4ECDC4',
+                      backgroundColor: waypoint.type === 'finish-start' ? 'var(--orange)' : '#4ECDC4',
                       color: 'white',
                       px: 1,
                       py: 0.5,
@@ -1230,7 +1230,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                       fontSize: '0.75rem'
                     }}
                   >
-                    {waypoint.type === 'finish-start' ? 'Finish/Start' : 'Intermediar'}
+                    {waypoint.type === 'finish-start' ? 'Sosire/Pornire Etapa' : 'Punct Intermediar'}
                   </Box>
                 </Box>
                 
@@ -1256,7 +1256,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     )}
                     {waypoint.startDate && (
                       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                        <strong>Data de start:</strong> {new Date(waypoint.startDate).toLocaleDateString('ro-RO')}
+                        <strong>Data de pornire:</strong> {new Date(waypoint.startDate).toLocaleDateString('ro-RO')}
                       </Typography>
                     )}
                     {waypoint.startTime && (
@@ -1476,8 +1476,8 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               {/* Gradient definitions - must be defined before use */}
               <defs>
                 <linearGradient id="completedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#4caf50" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="#4caf50" stopOpacity="0.1" />
+                  <stop offset="0%" stopColor="var(--blue)" stopOpacity="0.8" />
+                  <stop offset="100%" stopColor="var(--blue)" stopOpacity="0.1" />
                 </linearGradient>
                 <linearGradient id="remainingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" stopColor="#ff6b35" stopOpacity="0.8" />
@@ -1548,13 +1548,13 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   
                   return (
                     <>
-                      {/* Completed elevation path (green) */}
+                      {/* Completed elevation path (orange) */}
                       {completedPath && (
                         <>
                           <path
                             d={completedPath}
                             fill="none"
-                            stroke="#4caf50"
+                            stroke="var(--blue)"
                             strokeWidth="0.3"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -1600,7 +1600,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 y1="0"
                 x2="0"
                 y2="100"
-                stroke="var(--orange)"
+                stroke="var(--blue)"
                 strokeWidth="0.25"
                 strokeDasharray="2,2"
                 opacity="0"
@@ -1697,16 +1697,14 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       {/* Legend */}
       <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50', borderRadius: '50%' }} />
-          <Typography variant="caption">Start</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 12, height: 12, backgroundColor: 'var(--orange)', borderRadius: '50%' }} />
-          <Typography variant="caption">Locația curentă (Garmin)</Typography>
+          <Typography variant="caption">🏳️ Pornire</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 12, height: 12, backgroundColor: 'var(--blue)', borderRadius: '50%' }} />
-          <Typography variant="caption">Destinație</Typography>
+          <Typography variant="caption">Locația curentă (Garmin)</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="caption">🏁 Sosire</Typography>
         </Box>
         {gpxData && (
           <>
@@ -1732,8 +1730,8 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               <Typography variant="caption">Punct intermediar</Typography>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 12, height: 12, backgroundColor: '#FF6B35', borderRadius: '50%' }} />
-              <Typography variant="caption">Finish/Start</Typography>
+              <Box sx={{ width: 12, height: 12, backgroundColor: 'var(--orange)', borderRadius: '50%' }} />
+              <Typography variant="caption">Sosire/Pornire Etapa</Typography>
             </Box>
           </>
         )}
@@ -1741,7 +1739,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         {/* Elevation profile legend */}
         {gpxData && gpxData.tracks.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50', borderRadius: '50%' }} />
+            <Box sx={{ width: 12, height: 12, backgroundColor: '#ff6b35', borderRadius: '50%' }} />
             <Typography variant="caption">Profil Elevație</Typography>
           </Box>
         )}
