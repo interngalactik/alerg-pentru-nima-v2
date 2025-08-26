@@ -23,6 +23,7 @@ import {
 } from '@mui/icons-material';
 import { locationService, LocationPoint } from '@/lib/locationService';
 import { TrailProgress } from '@/lib/trailProgressService';
+import { AdminAuthService } from '@/lib/adminAuthService';
 
 interface GarminTrackerProps {
   trailPoints: [number, number][];
@@ -46,6 +47,32 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(true);
+
+  // Check admin status
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      try {
+        const isAdminUser = await AdminAuthService.isAdminLoggedIn();
+        setIsAdmin(isAdminUser);
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } finally {
+        setAdminLoading(false);
+      }
+    };
+    
+    checkAdminStatus();
+    
+    // Set up interval to check admin status periodically
+    const interval = setInterval(checkAdminStatus, 30000); // Check every 30 seconds
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, []);
 
   // Load initial data
   useEffect(() => {
@@ -173,6 +200,14 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
           <MyLocation sx={{ mr: 1, verticalAlign: 'middle' }} />
           Tracking
         </Typography>
+        {!adminLoading && (
+          <Chip 
+            label={isAdmin ? 'Admin' : 'User'} 
+            size="small" 
+            color={isAdmin ? 'success' : 'default'} 
+            variant="outlined"
+          />
+        )}
         <Tooltip title="Refresh tracking data">
           <span>
             <IconButton onClick={handleRefresh} disabled={loading}>
@@ -263,55 +298,57 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
           </Paper>
         </Grid>
 
-        {/* Manual Location Update */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 2, backgroundColor: 'rgba(255, 152, 0, 0.05)' }}>
-            <Typography variant="subtitle2" sx={{ mb: 2, color: 'var(--blue)' }}>
-              Manual Location Update (Testing)
-            </Typography>
-            
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Latitude"
-                  value={manualLat}
-                  onChange={(e) => setManualLat(e.target.value)}
-                  placeholder="e.g., 47.866123"
-                  size="small"
-                  fullWidth
-                />
+        {/* Manual Location Update - Admin Only */}
+        {!adminLoading && isAdmin && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, backgroundColor: 'rgba(255, 152, 0, 0.05)' }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, color: 'var(--blue)' }}>
+                Manual Location Update (Testing)
+              </Typography>
+              
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    label="Latitude"
+                    value={manualLat}
+                    onChange={(e) => setManualLat(e.target.value)}
+                    placeholder="e.g., 47.866123"
+                    size="small"
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    label="Longitude"
+                    value={manualLng}
+                    onChange={(e) => setManualLng(e.target.value)}
+                    placeholder="e.g., 25.598178"
+                    size="small"
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Button
+                    variant="contained"
+                    onClick={handleManualLocationUpdate}
+                    disabled={loading || !manualLat || !manualLng}
+                    startIcon={loading ? <CircularProgress size={16} /> : <LocationOn />}
+                    sx={{ backgroundColor: 'var(--orange)' }}
+                  >
+                    Update Location
+                  </Button>
+                </Grid>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField
-                  label="Longitude"
-                  value={manualLng}
-                  onChange={(e) => setManualLng(e.target.value)}
-                  placeholder="e.g., 25.598178"
-                  size="small"
-                  fullWidth
-                />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <Button
-                  variant="contained"
-                  onClick={handleManualLocationUpdate}
-                  disabled={loading || !manualLat || !manualLng}
-                  startIcon={loading ? <CircularProgress size={16} /> : <LocationOn />}
-                  sx={{ backgroundColor: 'var(--orange)' }}
-                >
-                  Update Location
-                </Button>
-              </Grid>
-            </Grid>
-            
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Use this to simulate Garmin InReach location updates for testing
-            </Typography>
-          </Paper>
-        </Grid>
+              
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Use this to simulate Garmin InReach location updates for testing
+              </Typography>
+            </Paper>
+          </Grid>
+        )}
 
-        {/* Location History */}
-        {locations.length > 0 && (
+        {/* Location History - Admin Only */}
+        {!adminLoading && isAdmin && locations.length > 0 && (
           <Grid item xs={12}>
             <Paper sx={{ p: 2 }}>
               <Typography variant="subtitle2" sx={{ mb: 2, color: 'var(--blue)' }}>
