@@ -215,14 +215,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
           <MyLocation sx={{ mr: 1, verticalAlign: 'middle' }} />
           Tracking
         </Typography>
-        {!adminLoading && (
-          <Chip 
-            label={isAdmin ? 'Admin' : 'User'} 
-            size="small" 
-            color={isAdmin ? 'success' : 'default'} 
-            variant="outlined"
-          />
-        )}
+
         <Tooltip title="Refresh tracking data">
           <span>
             <IconButton onClick={handleRefresh} disabled={loading}>
