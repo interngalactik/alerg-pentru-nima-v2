@@ -1,5 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Papa from 'papaparse';
+
+/*
+ * GOOGLE SHEETS SETUP INSTRUCTIONS:
+ * 1. Create a Google Sheet with your race data
+ * 2. Go to File > Share > Publish to web
+ * 3. Choose "Entire Document" and "CSV" format
+ * 4. Copy the spreadsheet ID from the URL (the long string between /d/ and /edit)
+ * 5. Update the spreadsheetId below with your actual ID
+ * 6. Make sure the sheet is publicly accessible
+ * 
+ * Example URL: https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+ * Spreadsheet ID: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms
+ */
 import {
   Table,
   TableBody,
@@ -8,7 +21,7 @@ import {
   TableHead,
   TableRow,
   Paper,
-  // Button,
+  Button,
   Typography,
   Box,
   CircularProgress,
@@ -46,13 +59,15 @@ const RacesTable = () => {
   const [csvData, setCsvData] = useState<Race[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [spreadsheetId] = useState('2PACX-1vSHYqZ9S0Q9pbMy97P1rYquyNr9897G6LsV_YP4_bBRxyoX-3hOspdM-iR0Z7Nf15JByZhvLwDwTMES');
+  const [spreadsheetId] = useState('2PACX-1vSHYqZ9S0Q9pbMy97P1rYquyNr9897G6LsV_YP4_bBRxyoX-3hOspdM-iR0Z7Nf15JByZhvLwDwTMES'); // Example spreadsheet ID - replace with your actual one
   const [sheetId, setSheetId] = useState(getInitialSheetId());
 
   const fetchData = useCallback(async (sheetId: string) => {
     setLoading(true); // Start loading
     try {
-      const response = await fetch(`https://docs.google.com/spreadsheets/d/e/${spreadsheetId}/pub?output=csv&gid=${sheetId}`); // Replace with your actual Sheet ID
+      // Use the correct Google Sheets CSV export URL format
+      const response = await fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&gid=${sheetId}`);
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -153,9 +168,24 @@ const RacesTable = () => {
             ) : error ? (
               <TableRow>
                 <TableCell colSpan={8} sx={{ border: 0 }}>
-                  <Typography variant="h6" color="error" align="center" sx={{ marginTop: 2 }}>
-                    Error: {error}
-                  </Typography>
+                  <Box sx={{ p: 3, textAlign: 'center' }}>
+                    <Typography variant="h6" color="error" sx={{ mb: 1 }}>
+                      Error loading data: {error}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Please check if the Google Sheets URL is correct and publicly accessible.
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      The spreadsheet needs to be published to the web and accessible via the provided URL.
+                    </Typography>
+                    <Button 
+                      variant="outlined" 
+                      onClick={() => fetchData(sheetId)}
+                      sx={{ mt: 2 }}
+                    >
+                      Retry
+                    </Button>
+                  </Box>
                 </TableCell>
               </TableRow>
             ) : csvData.length === 0 && sheetId === '1758931029' ? (

@@ -9,6 +9,7 @@ import Navigation from '@/components/via-transilvanica/Navigation';
 import GarminTracker from '@/components/via-transilvanica/GarminTracker';
 import CryptoJS from 'crypto-js';
 import { STRAVA_CALL_REFRESH, STRAVA_CALL_ACTIVITIES } from '@/lib/constants';
+import { parseGPX, ParsedGPX } from '@/lib/gpxParser';
 
 
 // Dynamically import the map component to avoid SSR issues
@@ -30,6 +31,8 @@ const ViaTransilvanicaPage = () => {
   const [smsCount, setSmsCount] = useState(0);
   const [totalKmRun, setTotalKmRun] = useState(0); // Total km run from Strava
   const [kmRunLoading, setKmRunLoading] = useState(true); // Loading state for km
+  const [gpxData, setGpxData] = useState<ParsedGPX | null>(null);
+  const [elevationData, setElevationData] = useState<number[]>([]);
 
 
   // Set client-side flag after mount to prevent hydration issues
@@ -86,6 +89,29 @@ const ViaTransilvanicaPage = () => {
       return prev;
     });
   };
+
+  // Load GPX data and extract elevation
+  useEffect(() => {
+    const loadGPXData = async () => {
+      try {
+        const response = await fetch('/gpx/Via-Transilvanica-Traseu.gpx');
+        if (response.ok) {
+          const gpxContent = await response.text();
+          const parsed = parseGPX(gpxContent);
+          setGpxData(parsed);
+          
+          // Extract elevation data from the first track
+          if (parsed.tracks.length > 0 && parsed.tracks[0].elevation) {
+            setElevationData(parsed.tracks[0].elevation);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading GPX data:', error);
+      }
+    };
+
+    loadGPXData();
+  }, []);
 
   // Fetch SMS count from API
   useEffect(() => {
@@ -258,7 +284,7 @@ const ViaTransilvanicaPage = () => {
             mb: 2
           }}>
             <span style={{ color: 'var(--blue)' }}>Alerg pentru Nima</span>{' '}
-            <span style={{ color: '#000', fontFamily: 'cursive', fontStyle: 'italic', fontSize: '0.7em', opacity: 0.6 }}>pe</span>{' '}
+            <span style={{ fontSize: '0.7em', fontWeight: '400', color: 'rgba(0, 0, 0, 0.6)' }}>pe</span>{' '}
             <span style={{ color: '#EF7D00' }}>Via Transilvanica</span>
           </Typography>
           <Typography variant="h5" sx={{ color: 'text.secondary', mb: 3 }}>
@@ -473,6 +499,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
           trailPoints={[]} // This will be populated from GPX data
           totalDistance={trackProgress?.totalDistance || totalDistance}
           trackProgress={trackProgress}
+          elevationData={elevationData}
         />
 
 

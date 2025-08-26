@@ -19,6 +19,7 @@ import {
   MyLocation, 
   Refresh, 
   Timeline,
+  LinearScale,
   Speed
 } from '@mui/icons-material';
 import { locationService, LocationPoint } from '@/lib/locationService';
@@ -49,6 +50,12 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(true);
+  const [completedElevationGain, setCompletedElevationGain] = useState(0);
+  const [totalElevationGain, setTotalElevationGain] = useState(0);
+  
+  // These elevation variables are now available throughout the component:
+  // - completedElevationGain: Current elevation gain based on progress
+  // - totalElevationGain: Total elevation gain for the entire trail
 
   // Check admin status
   useEffect(() => {
@@ -184,6 +191,14 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     return { completed: completedElevationGain, total: totalElevationGain };
   };
 
+  // Calculate and update elevation values whenever relevant data changes
+  useEffect(() => {
+    if (elevationData && elevationData.length > 0) {
+      const { completed, total } = getElevationProgress();
+      setCompletedElevationGain(completed);
+      setTotalElevationGain(total);
+    }
+  }, [elevationData, mapTrackProgress, totalDistance]);
 
   if (loading && locations.length === 0) {
     return (
@@ -264,16 +279,22 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Timeline sx={{ mr: 1, color: 'var(--orange)' }} />
+              <LinearScale sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
                 {mapTrackProgress?.completedDistance ? mapTrackProgress.completedDistance.toFixed(2) : '0.00'} km / {totalDistance.toFixed(2)} km
               </Typography>
             </Box>
-            {mapTrackProgress?.completedDistance && mapTrackProgress.completedDistance > totalDistance && (
+            {/* {mapTrackProgress?.completedDistance && mapTrackProgress.completedDistance > totalDistance && (
               <Typography variant="caption" color="warning.main" display="block">
                 ⚠️ Completed distance exceeds total distance. Using total distance as maximum.
               </Typography>
-            )}
+            )} */}
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Timeline sx={{ mr: 1, color: 'var(--orange)' }} />
+              <Typography variant="body2">
+              {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m
+              </Typography>
+            </Box>
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Speed sx={{ mr: 1, color: 'var(--orange)' }} />
@@ -283,16 +304,13 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             </Box>
 
             {/* Elevation Progress */}
-            {elevationData && elevationData.length > 0 && (() => {
-              const elevationProgress = getElevationProgress();
-              return (
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="body2" sx={{ mr: 1 }}>
-                    📈 Elevație: {elevationProgress.completed.toFixed(0)}m / {elevationProgress.total.toFixed(0)}m
-                  </Typography>
-                </Box>
-              );
-            })()}
+            {/* {elevationData && elevationData.length > 0 && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <Typography variant="body2" sx={{ mr: 1 }}>
+                  📈 Elevație: {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m
+                </Typography>
+              </Box>
+            )} */}
 
             {/* ETA calculation removed - not available in new progress system */}
           </Paper>
