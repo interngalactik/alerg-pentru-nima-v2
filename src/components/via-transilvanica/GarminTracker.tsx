@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
   Typography, 
@@ -19,12 +19,13 @@ import {
   MyLocation, 
   Refresh, 
   Timeline,
-  LinearScale,
+  TrendingUp,
   Speed
 } from '@mui/icons-material';
 import { locationService, LocationPoint } from '@/lib/locationService';
 import { TrailProgress } from '@/lib/trailProgressService';
 import { AdminAuthService } from '@/lib/adminAuthService';
+import { GarminService } from '@/lib/garminService';
 
 interface GarminTrackerProps {
   trailPoints: [number, number][];
@@ -52,6 +53,21 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   const [adminLoading, setAdminLoading] = useState(true);
   const [completedElevationGain, setCompletedElevationGain] = useState(0);
   const [totalElevationGain, setTotalElevationGain] = useState(0);
+  const [garminEmail, setGarminEmail] = useState('');
+  const [garminPassword, setGarminPassword] = useState('');
+  const [garminConnected, setGarminConnected] = useState(false);
+  const [garminConnecting, setGarminConnecting] = useState(false);
+  const [garminError, setGarminError] = useState<string | null>(null);
+  
+  // Create Garmin service instance (use useRef to maintain instance across renders)
+  const garminServiceRef = useRef<GarminService | null>(null);
+  
+  // Initialize the service if it doesn't exist
+  if (!garminServiceRef.current) {
+    garminServiceRef.current = new GarminService();
+  }
+  
+  const garminService = garminServiceRef.current;
   
   // These elevation variables are now available throughout the component:
   // - completedElevationGain: Current elevation gain based on progress
@@ -191,6 +207,64 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     return { completed: completedElevationGain, total: totalElevationGain };
   };
 
+  // Connect to Garmin InReach
+  const handleGarminConnect = async () => {
+    if (!garminEmail) {
+      setGarminError('Please enter your API key');
+      return;
+    }
+
+    try {
+      setGarminConnecting(true);
+      setGarminError(null);
+
+      // Set the API key directly
+      garminService.setApiKey(garminEmail, garminPassword || undefined);
+      
+      // Test the connection by trying to get tracking status
+      const result = await garminService.getTrackingStatus();
+
+      if (result.success) {
+        setGarminConnected(true);
+        setGarminError(null);
+        startGarminLocationUpdates();
+      } else {
+        setGarminError(result.message || 'API key validation failed. Please check your API key.');
+      }
+    } catch (error) {
+      console.error('Garmin connection error:', error);
+      setGarminError(error instanceof Error ? error.message : 'Connection failed');
+    } finally {
+      setGarminConnecting(false);
+    }
+  };
+
+  // Start automatic location updates from Garmin
+  const startGarminLocationUpdates = () => {
+    if (!garminService.isAuthenticated()) return;
+
+    // Update location every 10 minutes (matching InReach frequency)
+    const interval = setInterval(async () => {
+      try {
+        const result = await garminService.getCurrentLocation();
+        if (result.success && result.location) {
+          await locationService.addLocation({
+            lat: result.location.latitude,
+            lng: result.location.longitude,
+            timestamp: new Date(result.location.timestamp).getTime(),
+            elevation: result.location.elevation,
+            accuracy: result.location.accuracy
+          });
+        }
+      } catch (error) {
+        console.error('Error updating location from Garmin:', error);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
+    // Cleanup on unmount
+    return () => clearInterval(interval);
+  };
+
   // Calculate and update elevation values whenever relevant data changes
   useEffect(() => {
     if (elevationData && elevationData.length > 0) {
@@ -214,6 +288,15 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
         <Typography variant="h6" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
           <MyLocation sx={{ mr: 1, verticalAlign: 'middle' }} />
           Tracking
+          {garminConnected && (
+            <Chip 
+              label="InReach Connected" 
+              size="small" 
+              color="success" 
+              variant="outlined"
+              sx={{ ml: 1 }}
+            />
+          )}
         </Typography>
 
         <Tooltip title="Refresh tracking data">
@@ -272,7 +355,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             </Typography>
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <LinearScale sx={{ mr: 1, color: 'var(--orange)' }} />
+              <Timeline sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
                 {mapTrackProgress?.completedDistance ? mapTrackProgress.completedDistance.toFixed(2) : '0.00'} km / {totalDistance.toFixed(2)} km
               </Typography>
@@ -283,7 +366,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
               </Typography>
             )} */}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Timeline sx={{ mr: 1, color: 'var(--orange)' }} />
+              <TrendingUp sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
               {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m
               </Typography>
@@ -353,6 +436,120 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
               
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                 Use this to simulate Garmin InReach location updates for testing
+              </Typography>
+            </Paper>
+          </Grid>
+        )}
+
+        {/* Garmin InReach Configuration - Admin Only */}
+        {!adminLoading && isAdmin && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, backgroundColor: 'rgba(76, 175, 80, 0.05)' }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, color: 'var(--blue)' }}>
+                Garmin InReach Configuration
+              </Typography>
+              
+              {garminError && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setGarminError(null)}>
+                  {garminError}
+                </Alert>
+              )}
+              
+              {garminConnected ? (
+                <Box>
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    ✅ Connected to Garmin InReach! Location updates will be fetched every 10 minutes.
+                  </Alert>
+                  <Button
+                    variant="outlined"
+                    onClick={async () => {
+                      try {
+                        const result = await garminService.getCurrentLocation();
+                        if (result.success && result.location) {
+                          await locationService.addLocation({
+                            lat: result.location.latitude,
+                            lng: result.location.longitude,
+                            timestamp: new Date(result.location.timestamp).getTime(),
+                            elevation: result.location.elevation,
+                            accuracy: result.location.accuracy
+                          });
+                          alert('✅ Location fetched successfully!\nLat: ' + result.location.latitude.toFixed(6) + '\nLng: ' + result.location.longitude.toFixed(6));
+                        } else {
+                          alert('❌ No location data available: ' + (result.message || 'Unknown error'));
+                        }
+                      } catch (error) {
+                        alert('❌ Error fetching location: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                      }
+                    }}
+                    sx={{ mr: 1 }}
+                  >
+                    Test Fetch Location
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => {
+                      garminService.logout();
+                      setGarminConnected(false);
+                      setGarminEmail('');
+                      setGarminPassword('');
+                    }}
+                  >
+                    Disconnect
+                  </Button>
+                </Box>
+              ) : (
+                <Grid container spacing={2} alignItems="center">
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="API Key"
+                      value={garminEmail}
+                      onChange={(e) => setGarminEmail(e.target.value)}
+                      placeholder="Your Garmin IPC v2 API Key"
+                      size="small"
+                      fullWidth
+                      type="password"
+                      helperText="Get this from explore.garmin.com > Admin Controls > Portal Connect"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Custom API URL (Optional)"
+                      value={garminPassword}
+                      onChange={(e) => setGarminPassword(e.target.value)}
+                      placeholder="e.g., https://your-tenant.inreachapp.com"
+                      size="small"
+                      fullWidth
+                      helperText="Leave empty to use default IPC v2 URL"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      variant="contained"
+                      onClick={handleGarminConnect}
+                      disabled={garminConnecting || !garminEmail}
+                      startIcon={garminConnecting ? <CircularProgress size={16} /> : <LocationOn />}
+                      sx={{ backgroundColor: 'var(--orange)', mr: 1 }}
+                    >
+                      {garminConnecting ? 'Connecting...' : 'Connect InReach'}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setGarminEmail('');
+                        setGarminPassword('');
+                        setGarminError(null);
+                      }}
+                      size="small"
+                    >
+                      Clear Fields
+                    </Button>
+                  </Grid>
+                </Grid>
+              )}
+              
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Connect your Garmin InReach Messenger using your IPC v2 API key for automatic location updates every 10 minutes
               </Typography>
             </Paper>
           </Grid>
