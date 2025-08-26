@@ -117,4 +117,16 @@ export class WaypointService {
       throw new Error('Failed to get waypoint');
     }
   }
+
+  // Clear all waypoints (useful for database cleanup)
+  static async clearAllWaypoints(): Promise<void> {
+    try {
+      const waypointsRef = ref(database, this.WAYPOINTS_REF);
+      await remove(waypointsRef);
+      console.log('All waypoints cleared from database');
+    } catch (error) {
+      console.error('Error clearing all waypoints:', error);
+      throw new Error('Failed to clear all waypoints');
+    }
+  }
 }

@@ -1132,12 +1132,51 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             })}
           >
             <Popup>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-              Pornire - {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
+            <Box sx={{ minWidth: 200 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Putna
               </Typography>
-              <Typography variant="caption">
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
               Începutul traseului Via Transilvanica
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box
+                    sx={{
+                      backgroundColor: 'var(--blue)',
+                      color: 'white',
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    Start
+                  </Box>
+                </Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                    <strong>Data de pornire:</strong> {new Date('2025-09-01').toLocaleDateString('ro-RO')}
+                 </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                    <strong>Ora de pornire:</strong> 07:00
+              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                  Coordonate: {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
+                </Typography>
+
+                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      const url = `https://www.google.com/maps?q=${startPoint[0].toFixed(4)},${startPoint[1].toFixed(4)}`;
+                      window.open(url, '_blank');
+                    }}
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    🗺️ Deschide în Google Maps
+                  </Button>
+                  </Box>
+              </Box>
             </Popup>
           </Marker>
       )}
@@ -1153,12 +1192,48 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             })}
           >
             <Popup>
-              <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-            Sosire - {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
+            <Box sx={{ minWidth: 200 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+              Drobeta-Turnu Severin
               </Typography>
-              <Typography variant="caption">
-            Sfârșitul traseului Via Transilvanica
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+              Sfârșitul traseului Via Transilvanica
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box
+                    sx={{
+                      backgroundColor: 'var(--orange)',
+                      color: 'white',
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    Destinație
+                  </Box>
+                </Box>
+                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                    <strong>Data de sosire:</strong> {new Date('2025-09-25').toLocaleDateString('ro-RO')}
+                 </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                  Coordonate: {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
+                </Typography>
+
+                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      const url = `https://www.google.com/maps?q=${endPoint[0].toFixed(4)},${endPoint[1].toFixed(4)}`;
+                      window.open(url, '_blank');
+                    }}
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    🗺️ Deschide în Google Maps
+                  </Button>
+                  </Box>
+              </Box>
             </Popup>
           </Marker>
 
@@ -1261,7 +1336,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     )}
                     {waypoint.startTime && (
                       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                        <strong>Ora de start:</strong> {waypoint.startTime}
+                        <strong>Ora de pornire:</strong> {waypoint.startTime}
                       </Typography>
                     )}
                   </Box>
@@ -1714,10 +1789,33 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             </Box>
 
             {isAdmin && (
+            <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ width: 12, height: 12, backgroundColor: '#4caf50' }} />
                 <Typography variant="caption">Click Track to Add Waypoint</Typography>
             </Box>
+            <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={async () => {
+                    if (confirm('⚠️ ATENȚIE: Această acțiune va șterge TOATE waypoint-urile din baza de date. Ești sigur că vrei să continui?')) {
+                        try {
+                            await WaypointService.clearAllWaypoints();
+                            alert('✅ Baza de date a fost curățată cu succes! Toate waypoint-urile au fost șterse.');
+                            // Force refresh
+                            window.location.reload();
+                        } catch (error) {
+                            console.error('Error clearing database:', error);
+                            alert('❌ Eroare la curățarea bazei de date. Te rugăm să încerci din nou.');
+                        }
+                    }
+                }}
+                sx={{ fontSize: '0.75rem', ml: 2 }}
+            >
+                🗑️ Curăță Baza de Date
+            </Button>
+            </>
             )}
           </>
         )}
