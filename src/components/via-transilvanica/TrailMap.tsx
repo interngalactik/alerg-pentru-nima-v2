@@ -11,6 +11,8 @@ import { WaypointService } from '../../lib/waypointService';
 import { AdminAuthService } from '../../lib/adminAuthService';
 import { locationService, LocationPoint } from '../../lib/locationService';
 import WaypointForm from './WaypointForm';
+import { ref, set, get } from 'firebase/database';
+import { database } from '../../lib/firebase';
 
 // Map Click Handler Component for Coordinate Selection
 function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
@@ -46,6 +48,10 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentLocationPoint, setCurrentLocationPoint] = useState<LocationPoint | null>(null);
   const [elevationCursorPosition, setElevationCursorPosition] = useState<[number, number] | null>(null);
+  const [startDate, setStartDate] = useState<Date>(new Date('2025-09-01'));
+  const [startTime, setStartTime] = useState<string>('07:00');
+  const [finishDate, setFinishDate] = useState<Date>(new Date('2025-09-25'));
+  const [finishTime, setFinishTime] = useState<string>('18:00');
   const mapRef = useRef<any>(null);
   const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
 
@@ -510,6 +516,9 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     // Check initial status
     checkAdminStatus();
     
+    // Load start/finish dates from Firebase
+    loadStartFinishDates();
+    
     // Set up interval to check admin status periodically
     const interval = setInterval(checkAdminStatus, 30000); // Check every 30 seconds
 
@@ -517,6 +526,15 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       clearInterval(interval);
     };
   }, []);
+
+  // Auto-save start/finish dates when they change
+  useEffect(() => {
+    // console.log('Dates changed - startDate:', startDate, 'startTime:', startTime, 'finishDate:', finishDate, 'finishTime:', finishTime, 'isAdmin:', isAdmin);
+    if (isAdmin) {
+      // console.log('Saving dates to Firebase...');
+      saveStartFinishDates();
+    }
+  }, [startDate, startTime, finishDate, finishTime, isAdmin]);
 
   // Track current location from Garmin InReach
   useEffect(() => {
@@ -716,6 +734,45 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         const bounds = (window as any).L.latLngBounds(allPoints);
         mapRef.current.fitBounds(bounds);
       }
+    }
+  };
+
+  // Save start/finish dates to Firebase
+  const saveStartFinishDates = async () => {
+    try {
+      const datesData = {
+        startDate: startDate.toISOString(),
+        startTime: startTime,
+        finishDate: finishDate.toISOString(),
+        finishTime: finishTime,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Save to Firebase under a special key
+      const datesRef = ref(database, 'startFinishDates');
+      await set(datesRef, datesData);
+      // console.log('Start/finish dates saved to Firebase');
+    } catch (error) {
+      console.error('Error saving start/finish dates:', error);
+    }
+  };
+
+  // Load start/finish dates from Firebase
+  const loadStartFinishDates = async () => {
+    try {
+      const datesRef = ref(database, 'startFinishDates');
+      const snapshot = await get(datesRef);
+      
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        if (data.startDate) setStartDate(new Date(data.startDate));
+        if (data.startTime) setStartTime(data.startTime);
+        if (data.finishDate) setFinishDate(new Date(data.finishDate));
+        if (data.finishTime) setFinishTime(data.finishTime);
+        console.log('Start/finish dates loaded from Firebase');
+      }
+    } catch (error) {
+      console.error('Error loading start/finish dates:', error);
     }
   };
 
@@ -1153,29 +1210,59 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     Start
                   </Box>
                 </Box>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                    <strong>Data de pornire:</strong> {new Date('2025-09-01').toLocaleDateString('ro-RO')}
-                 </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                    <strong>Ora de pornire:</strong> 07:00
-              </Typography>
+                                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                     <strong>Data de pornire:</strong> {startDate.toLocaleDateString('ro-RO')}
+                  </Typography>
+                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                     <strong>Ora de pornire:</strong> {startTime}
+               </Typography>
               <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
                   Coordonate: {startPoint[0].toFixed(4)}, {startPoint[1].toFixed(4)}
                 </Typography>
 
-                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      const url = `https://www.google.com/maps?q=${startPoint[0].toFixed(4)},${startPoint[1].toFixed(4)}`;
-                      window.open(url, '_blank');
-                    }}
-                    sx={{ fontSize: '0.75rem' }}
-                  >
-                    🗺️ Deschide în Google Maps
-                  </Button>
-                  </Box>
+                                 <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                   <Button
+                     size="small"
+                     variant="outlined"
+                     onClick={() => {
+                       const url = `https://www.google.com/maps?q=${startPoint[0].toFixed(4)},${startPoint[1].toFixed(4)}`;
+                       window.open(url, '_blank');
+                     }}
+                     sx={{ fontSize: '0.75rem' }}
+                   >
+                     🗺️ Deschide în Google Maps
+                   </Button>
+                   {isAdmin && (
+                     <>
+                       <Button
+                         size="small"
+                         variant="outlined"
+                         onClick={() => {
+                           const newDate = prompt('Data de pornire (YYYY-MM-DD):', startDate.toISOString().split('T')[0]);
+                           if (newDate) {
+                             setStartDate(new Date(newDate));
+                           }
+                         }}
+                         sx={{ fontSize: '0.75rem' }}
+                       >
+                         ✏️ Editează Data
+                       </Button>
+                       <Button
+                         size="small"
+                         variant="outlined"
+                         onClick={() => {
+                           const newTime = prompt('Ora de pornire (HH:MM):', startTime);
+                           if (newTime && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(newTime)) {
+                             setStartTime(newTime);
+                           }
+                         }}
+                         sx={{ fontSize: '0.75rem' }}
+                       >
+                         ✏️ Editează Ora
+                       </Button>
+                     </>
+                   )}
+                   </Box>
               </Box>
             </Popup>
           </Marker>
@@ -1213,26 +1300,101 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     Destinație
                   </Box>
                 </Box>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                    <strong>Data de sosire:</strong> {new Date('2025-09-25').toLocaleDateString('ro-RO')}
+                                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                     <strong>Data de sosire:</strong> {finishDate.toLocaleDateString('ro-RO')}
+                  </Typography>
+                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                     <strong>Ora de sosire:</strong> {finishTime}
+                  </Typography>
+                               {/* Distance and elevation information */}
+                 {currentLocationPoint && (
+                   <>
+                     <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                       <strong>Distanța de la locația curentă:</strong> {calculateDistanceToWaypoint({ lat: endPoint[0], lng: endPoint[1] }).toFixed(1)} km
+                     </Typography>
+                     <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                       <strong>Urcarea de la locația curentă:</strong> {calculateElevationGain([currentLocationPoint.lat, currentLocationPoint.lng], endPoint).toFixed(0)} m
+                     </Typography>
+                   </>
+                 )}
+                 
+                 {/* Distance and elevation from last waypoint */}
+                 {waypoints.length > 0 && (
+                   (() => {
+                     const lastWaypoint = waypoints
+                       .filter(wp => wp.coordinates && Math.abs(wp.coordinates.lat) > 0.001 && Math.abs(wp.coordinates.lng) > 0.001)
+                       .sort((a, b) => {
+                         if (!a.coordinates || !b.coordinates) return 0;
+                         const distA = calculateTrackDistanceBetweenPoints([a.coordinates.lat, a.coordinates.lng], endPoint);
+                         const distB = calculateTrackDistanceBetweenPoints([b.coordinates.lat, b.coordinates.lng], endPoint);
+                         return distA - distB;
+                       })[0];
+                     
+                     if (lastWaypoint && lastWaypoint.coordinates) {
+                       const distance = calculateTrackDistanceBetweenPoints([lastWaypoint.coordinates.lat, lastWaypoint.coordinates.lng], endPoint);
+                       const elevation = calculateElevationGain([lastWaypoint.coordinates.lat, lastWaypoint.coordinates.lng], endPoint);
+                       return (
+                         <>
+                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                             <strong>Distanța de la ultimul waypoint ({lastWaypoint.name}):</strong> {distance.toFixed(1)} km
+                           </Typography>
+                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+                             <strong>Urcarea de la ultimul waypoint:</strong> {elevation.toFixed(0)} m
+                           </Typography>
+                         </>
+                       );
+                     }
+                     return null;
+                   })()
+                 )}
+                 
+                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
+                   Coordonate: {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
                  </Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>
-                  Coordonate: {endPoint[0].toFixed(4)}, {endPoint[1].toFixed(4)}
-                </Typography>
 
-                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      const url = `https://www.google.com/maps?q=${endPoint[0].toFixed(4)},${endPoint[1].toFixed(4)}`;
-                      window.open(url, '_blank');
-                    }}
-                    sx={{ fontSize: '0.75rem' }}
-                  >
-                    🗺️ Deschide în Google Maps
-                  </Button>
-                  </Box>
+                                 <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                   <Button
+                     size="small"
+                     variant="outlined"
+                     onClick={() => {
+                       const url = `https://www.google.com/maps?q=${endPoint[0].toFixed(4)},${endPoint[1].toFixed(4)}`;
+                       window.open(url, '_blank');
+                     }}
+                     sx={{ fontSize: '0.75rem' }}
+                   >
+                     🗺️ Deschide în Google Maps
+                   </Button>
+                   {isAdmin && (
+                     <>
+                       <Button
+                         size="small"
+                         variant="outlined"
+                         onClick={() => {
+                           const newDate = prompt('Data de sosire (YYYY-MM-DD):', finishDate.toISOString().split('T')[0]);
+                           if (newDate) {
+                             setFinishDate(new Date(newDate));
+                           }
+                         }}
+                         sx={{ fontSize: '0.75rem' }}
+                       >
+                         ✏️ Editează Data
+                       </Button>
+                       <Button
+                         size="small"
+                         variant="outlined"
+                         onClick={() => {
+                           const newTime = prompt('Ora de sosire (HH:MM):', finishTime);
+                           if (newTime && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(newTime)) {
+                             setFinishTime(newTime);
+                           }
+                         }}
+                         sx={{ fontSize: '0.75rem' }}
+                       >
+                         ✏️ Editează Ora
+                       </Button>
+                     </>
+                   )}
+                   </Box>
               </Box>
             </Popup>
           </Marker>

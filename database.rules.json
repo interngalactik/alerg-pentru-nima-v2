@@ -11,6 +11,10 @@
     "waypoints": {
       ".read": true,
       ".write": true
+    },
+    "startFinishDates": {
+      ".read": true,
+      ".write": true
     }
   }
 } 
