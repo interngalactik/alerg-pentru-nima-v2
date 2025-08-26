@@ -8,6 +8,7 @@ import Image from 'next/image';
 import Navigation from '@/components/via-transilvanica/Navigation';
 import GarminTracker from '@/components/via-transilvanica/GarminTracker';
 import CryptoJS from 'crypto-js';
+import { STRAVA_CALL_REFRESH, STRAVA_CALL_ACTIVITIES } from '@/lib/constants';
 
 
 // Dynamically import the map component to avoid SSR issues
@@ -138,10 +139,88 @@ const ViaTransilvanicaPage = () => {
           setTotalKmRun(kmRun);
           setKmRunLoading(false);
         } else {
-          setKmRunLoading(false);
+          // If no data in localStorage, fetch from Strava
+          fetchStravaData();
         }
       } catch (error) {
         console.error('Error reading km run from localStorage:', error);
+        // If localStorage fails, try fetching from Strava
+        fetchStravaData();
+      }
+    };
+
+    // Fallback function to fetch Strava data directly
+    const fetchStravaData = async () => {
+      try {
+        setKmRunLoading(true);
+        
+        // First try to get from localStorage
+        const savedKmRun = localStorage.getItem('lastKmRun');
+        const savedCheckTime = localStorage.getItem('lastCheckTime');
+        
+        // Check if we have recent data (less than 1 hour old)
+        if (savedKmRun && savedCheckTime) {
+          const lastCheck = new Date(savedCheckTime);
+          const now = new Date();
+          const hoursDiff = (now.getTime() - lastCheck.getTime()) / (1000 * 60 * 60);
+          
+          if (hoursDiff < 1) {
+            // Use cached data if it's recent
+            setTotalKmRun(parseFloat(savedKmRun));
+            setKmRunLoading(false);
+            return;
+          }
+        }
+        
+        // If no recent data, fetch from Strava using the same logic as main page
+        try {
+          // First refresh the token
+          const refreshResponse = await fetch(STRAVA_CALL_REFRESH, {
+            method: 'POST'
+          });
+          
+          if (!refreshResponse.ok) {
+            throw new Error('Failed to refresh Strava token');
+          }
+          
+          const refreshData = await refreshResponse.json();
+          const accessToken = refreshData.access_token;
+          
+          // Fetch activities from multiple pages
+          const endpoints = [
+            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=1`,
+            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=2`,
+            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=3`,
+            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=4`,
+            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=5`
+          ];
+          
+          const responses = await Promise.all(endpoints.map(endpoint => fetch(endpoint)));
+          const activitiesData = await Promise.all(responses.map(response => response.json()));
+          
+          // Calculate total distance from running activities only (same as main page)
+          let ALL_ACTIVITIES: any[] = [];
+          activitiesData.forEach((activityArray) => {
+            ALL_ACTIVITIES = ALL_ACTIVITIES.concat(activityArray);
+          });
+          
+          const runs = ALL_ACTIVITIES.filter((activity: any) => activity.type === 'Run');
+          const totalDistanceMeters = runs.reduce((acc, run) => acc + run.distance, 0);
+          const totalKm = Math.round(totalDistanceMeters * 100 / 1000) / 100; // Same rounding as main page
+          
+          // Save to localStorage
+          localStorage.setItem('lastKmRun', totalKm.toString());
+          localStorage.setItem('lastCheckTime', new Date().toISOString());
+          
+          setTotalKmRun(totalKm);
+        } catch (stravaError) {
+          console.warn('Failed to fetch Strava data:', stravaError);
+          setTotalKmRun(0);
+        }
+      } catch (error) {
+        console.error('Error in fetchStravaData:', error);
+        setTotalKmRun(0);
+      } finally {
         setKmRunLoading(false);
       }
     };
@@ -267,9 +346,9 @@ Iar eu alerg pentru fiecare mesaj în parte.
                   KM*
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
-                    {kmRunLoading ? 'LOADING...' : `${totalKmRun.toFixed(2)}/7000`}
-                  </Typography>
+                                  <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
+                  {kmRunLoading ? 'Se încarcă...' : `${totalKmRun.toFixed(2)}/7000`}
+                </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {kmRunLoading ? '...' : `${((totalKmRun / 7000) * 100).toFixed(1)}%`}
                   </Typography>
@@ -288,6 +367,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontStyle: 'italic', display: 'flex' }}>
                   * kilometri alergați de la începutul campaniei
+                  {kmRunLoading && ' (se încarcă din Strava...)'}
                 </Typography>
               </Box>
 
