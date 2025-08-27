@@ -64,7 +64,11 @@ class GarminExploreService {
   }
 
   // Try to find InReach-specific endpoints
-  async findInReachEndpoints(): Promise<{ success: boolean; message: string; endpoints?: string[] }> {
+  async findInReachEndpoints(): Promise<{ 
+    success: boolean; 
+    message: string; 
+    endpoints?: Array<{ endpoint: string; status: number | string; accessible: boolean; error?: string }> 
+  }> {
     try {
       console.log('🔍 Searching for InReach endpoints...');
       

@@ -26,10 +26,12 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const waypointId = await WaypointService.addWaypoint(
-      { name, type, details, coordinates },
-      createdBy
-    );
+    const waypointId = await WaypointService.addWaypoint({
+      name, 
+      type, 
+      details, 
+      coordinates
+    });
     
     return NextResponse.json({ success: true, waypointId });
   } catch (error) {

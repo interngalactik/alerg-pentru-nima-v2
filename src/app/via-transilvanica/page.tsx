@@ -1,8 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Box, Container, Typography, Paper, LinearProgress, Chip, Grid, Card, CardContent, Button } from '@mui/material';
-import { LocationOn, DirectionsWalk, Timer, TrendingUp } from '@mui/icons-material';
+import { 
+  Box, 
+  Typography, 
+  Paper, 
+  Button, 
+  Container,
+  LinearProgress
+} from '@mui/material';
+import { 
+  LocationOn, 
+  MyLocation
+} from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Navigation from '@/components/via-transilvanica/Navigation';
@@ -10,6 +20,7 @@ import GarminTracker from '@/components/via-transilvanica/GarminTracker';
 import CryptoJS from 'crypto-js';
 import { STRAVA_CALL_REFRESH, STRAVA_CALL_ACTIVITIES } from '@/lib/constants';
 import { parseGPX, ParsedGPX } from '@/lib/gpxParser';
+import { LocationPoint } from '@/lib/locationService';
 
 
 // Dynamically import the map component to avoid SSR issues
@@ -19,20 +30,22 @@ const TrailMap = dynamic(() => import('@/components/via-transilvanica/TrailMap')
 });
 
 const ViaTransilvanicaPage = () => {
-  const [currentProgress, setCurrentProgress] = useState(0); // 0-100 percentage
-  const [currentLocation, setCurrentLocation] = useState({ lat: 46.0569, lng: 24.2603 }); // Sibiu coordinates
-  const [totalDistance, setTotalDistance] = useState(1400); // km
-  const [completedDistance, setCompletedDistance] = useState(0); // km
-  const [startDate] = useState(new Date('2025-09-01T08:00:00')); // Planned start date at 8:00 AM
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [actualStartPoint, setActualStartPoint] = useState<[number, number] | null>(null);
-  const [isClient, setIsClient] = useState(false); // Add client-side only state
+  const [currentLocation, setCurrentLocation] = useState<LocationPoint | null>(null);
+  const [totalDistance, setTotalDistance] = useState(0);
+  const [currentProgress, setCurrentProgress] = useState(0);
+  const [completedDistance, setCompletedDistance] = useState(0);
   const [trackProgress, setTrackProgress] = useState<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
-  const [smsCount, setSmsCount] = useState(0);
-  const [totalKmRun, setTotalKmRun] = useState(0); // Total km run from Strava
-  const [kmRunLoading, setKmRunLoading] = useState(true); // Loading state for km
-  const [gpxData, setGpxData] = useState<ParsedGPX | null>(null);
+  const [startPoint, setStartPoint] = useState<[number, number] | null>(null);
+  const [endPoint, setEndPoint] = useState<[number, number] | null>(null);
   const [elevationData, setElevationData] = useState<number[]>([]);
+  const [totalKmRun, setTotalKmRun] = useState(0);
+  const [kmRunLoading, setKmRunLoading] = useState(true);
+  const [smsCount, setSmsCount] = useState(0);
+  const [isClient, setIsClient] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(new Date());
+  const [gpxData, setGpxData] = useState<ParsedGPX | null>(null);
+  const [actualStartPoint, setActualStartPoint] = useState<[number, number] | null>(null);
 
 
   // Set client-side flag after mount to prevent hydration issues
@@ -486,7 +499,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
             Traseul Via Transilvanica
           </Typography>
                       <TrailMap
-              currentLocation={currentLocation}
+              currentLocation={currentLocation ? { lat: currentLocation.lat, lng: currentLocation.lng } : { lat: 46.0569, lng: 24.2603 }}
               progress={currentProgress}
               completedDistance={completedDistance}
               onStartPointChange={handleStartPointChange}

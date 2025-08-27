@@ -65,8 +65,8 @@ const RacesTable = () => {
   const fetchData = useCallback(async (sheetId: string) => {
     setLoading(true); // Start loading
     try {
-      // Use the correct Google Sheets CSV export URL format
-      const response = await fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&gid=${sheetId}`);
+      // Use the correct Google Sheets published CSV export URL format
+      const response = await fetch(`https://docs.google.com/spreadsheets/d/e/${spreadsheetId}/pub?output=csv&gid=${sheetId}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

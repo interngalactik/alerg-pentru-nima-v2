@@ -37,7 +37,10 @@ export class WaypointCompletionService {
     }
 
     // Check if we're currently in the run period
-    const isRunActive = runTimelineService.isRunActive(runTimeline);
+    const isRunActive = runTimelineService.isRunActive({
+      ...runTimeline,
+      updatedAt: new Date().toISOString()
+    });
     
     // If run is not active, no new completions
     if (!isRunActive) {

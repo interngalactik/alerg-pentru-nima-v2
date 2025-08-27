@@ -18,16 +18,27 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // Check admin status on mount
+  React.useEffect(() => {
+    const checkAdminStatus = async () => {
+      const status = await AdminAuthService.isAdminLoggedIn();
+      setIsLoggedIn(status);
+    };
+    checkAdminStatus();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setIsLoading(true);
-
+    setError('');
+    
     try {
-      const success = AdminAuthService.login(password);
+      const success = await AdminAuthService.login(password);
       
       if (success) {
+        setIsLoggedIn(true);
         onLoginSuccess();
       } else {
         setError('Parola incorectă');
@@ -41,10 +52,9 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
   const handleLogout = () => {
     AdminAuthService.logout();
+    setIsLoggedIn(false);
     onLoginSuccess(); // This will refresh the admin status
   };
-
-  const isLoggedIn = AdminAuthService.isAdminLoggedIn();
 
   if (isLoggedIn) {
     return (
@@ -71,7 +81,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
   return (
     <Paper sx={{ p: 2, maxWidth: 300, mx: 'auto', mt: 2 }}>
-      <Box component="form" onSubmit={handleLogin} sx={{ textAlign: 'center' }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ textAlign: 'center' }}>
         <LockIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
         <Typography variant="h6" gutterBottom>
           Autentificare Admin
@@ -104,10 +114,6 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         >
           {isLoading ? 'Se conectează...' : 'Conectare'}
         </Button>
-        
-        <Typography variant="caption" display="block" sx={{ mt: 2, color: 'text.secondary' }}>
-          Parola: {AdminAuthService.getAdminPassword()}
-        </Typography>
       </Box>
     </Paper>
   );

@@ -35,7 +35,7 @@ class GarminExploreInvestigator {
         /coordinatesData\s*=\s*({[^}]+})/gi
       ];
 
-      const jsLocations = [];
+      const jsLocations: Array<{ pattern: string; data: string }> = [];
       jsLocationPatterns.forEach(pattern => {
         const matches = html.matchAll(pattern);
         for (const match of matches) {
@@ -55,7 +55,7 @@ class GarminExploreInvestigator {
         /data-lng="([^"]+)"/gi
       ];
 
-      const dataAttrs = [];
+      const dataAttrs: Array<{ pattern: string; value: string }> = [];
       dataAttrPatterns.forEach(pattern => {
         const matches = html.matchAll(pattern);
         for (const match of matches) {
@@ -75,7 +75,7 @@ class GarminExploreInvestigator {
         /url:\s*['"]([^'"]*)['"]/gi
       ];
 
-      const apiEndpoints = [];
+      const apiEndpoints: Array<{ pattern: string; endpoint: string }> = [];
       apiPatterns.forEach(pattern => {
         const matches = html.matchAll(pattern);
         for (const match of matches) {
@@ -93,7 +93,7 @@ class GarminExploreInvestigator {
         /latitude["\s]*:["\s]*([0-9.-]+)["\s]*,[\s]*longitude["\s]*:["\s]*([0-9.-]+)/gi
       ];
 
-      const coordinates = [];
+      const coordinates: Array<{ pattern: string; lat: string; lng: string }> = [];
       coordPatterns.forEach(pattern => {
         const matches = html.matchAll(pattern);
         for (const match of matches) {

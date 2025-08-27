@@ -46,7 +46,7 @@ const WaypointAdminPanel: React.FC<WaypointAdminPanelProps> = ({ isAdmin, onClos
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingWaypoint, setEditingWaypoint] = useState<Waypoint | null>(null);
-  const [formCoordinates, setFormCoordinates] = useState<[number, number] | null>(null);
+  const [formCoordinates, setFormCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
   // Load waypoints on component mount
   useEffect(() => {
@@ -72,13 +72,12 @@ const WaypointAdminPanel: React.FC<WaypointAdminPanelProps> = ({ isAdmin, onClos
 
   const handleAddWaypoint = async (waypointData: WaypointFormData) => {
     try {
-      await WaypointService.addWaypoint(waypointData, 'Admin'); // You can replace 'Admin' with actual user ID
+      await WaypointService.addWaypoint(waypointData);
       await loadWaypoints(); // Reload the list
       setShowForm(false);
       setFormCoordinates(null);
     } catch (error) {
       console.error('Error adding waypoint:', error);
-      throw error;
     }
   };
 
@@ -204,7 +203,7 @@ const WaypointAdminPanel: React.FC<WaypointAdminPanelProps> = ({ isAdmin, onClos
                       {waypoint.details}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Coordonate: {waypoint.coordinates[0].toFixed(6)}, {waypoint.coordinates[1].toFixed(6)}
+                      Coordonate: {waypoint.coordinates.lat.toFixed(6)}, {waypoint.coordinates.lng.toFixed(6)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" display="block">
                       Adăugat: {new Date(waypoint.createdAt).toLocaleDateString('ro-RO')}
@@ -242,12 +241,12 @@ const WaypointAdminPanel: React.FC<WaypointAdminPanelProps> = ({ isAdmin, onClos
 
       {/* Waypoint Form Dialog */}
       <WaypointForm
-        open={showForm}
+        isOpen={showForm}
         onClose={handleFormClose}
         onSubmit={editingWaypoint ? handleEditWaypoint : handleAddWaypoint}
-        waypoint={editingWaypoint}
-        coordinates={formCoordinates}
-        isAdmin={isAdmin}
+        initialData={editingWaypoint || undefined}
+        coordinates={formCoordinates || { lat: 46.0569, lng: 24.2603 }}
+        onCoordinateSelect={setFormCoordinates}
       />
     </Box>
   );
