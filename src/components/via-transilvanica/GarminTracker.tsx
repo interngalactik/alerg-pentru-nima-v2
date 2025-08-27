@@ -23,28 +23,63 @@ import {
   Speed
 } from '@mui/icons-material';
 import { locationService, LocationPoint } from '@/lib/locationService';
-import { TrailProgress } from '@/lib/trailProgressService';
+
 import { AdminAuthService } from '@/lib/adminAuthService';
 import { GarminService } from '@/lib/garminService';
 import { runTimelineService, RunTimeline } from '@/lib/runTimelineService';
+import { waypointCompletionService } from '@/lib/waypointCompletionService';
 
 interface GarminTrackerProps {
-  trailPoints: [number, number][];
   totalDistance: number;
   trackProgress?: { completedDistance: number; totalDistance: number; progressPercentage: number } | null;
-  onProgressUpdate?: (progress: TrailProgress) => void;
   elevationData?: number[];
 }
 
 const GarminTracker: React.FC<GarminTrackerProps> = ({ 
-  trailPoints, 
-  totalDistance, 
-  trackProgress: mapTrackProgress,
-  onProgressUpdate,
+  totalDistance,
+  trackProgress,
   elevationData
 }) => {
+  // Helper functions for elevation calculations - using the same logic as TrailMap overlay
+  const calculateCompletedElevationGain = (elevationData: number[], progressPercentage: number) => {
+    if (elevationData.length === 0 || progressPercentage === 0) {
+      return 0;
+    }
+    
+    // Calculate how many elevation points correspond to the completed progress
+    const totalPoints = elevationData.length;
+    const completedPoints = Math.floor((progressPercentage / 100) * totalPoints);
+    
+    // Use the same logic as TrailMap: slice elevation data to completed portion
+    const completedElevations = elevationData.slice(0, completedPoints);
+    
+    let completedElevationGain = 0;
+    for (let i = 1; i < completedElevations.length; i++) {
+      const elevationDiff = completedElevations[i] - completedElevations[i - 1];
+      if (elevationDiff > 0) {
+        completedElevationGain += elevationDiff;
+      }
+    }
+    return completedElevationGain;
+  };
+
+  const calculateTotalElevationGain = (elevationData: number[]) => {
+    if (elevationData.length === 0) {
+      return 0;
+    }
+    
+    // Use the exact same logic as TrailMap overlay
+    let totalElevationGain = 0;
+    for (let i = 1; i < elevationData.length; i++) {
+      const elevationDiff = elevationData[i] - elevationData[i - 1];
+      if (elevationDiff > 0) {
+        totalElevationGain += elevationDiff;
+      }
+    }
+    return totalElevationGain;
+  };
+
   const [currentLocation, setCurrentLocation] = useState<LocationPoint | null>(null);
-  const [progress, setProgress] = useState<TrailProgress | null>(null);
   const [locations, setLocations] = useState<LocationPoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [manualLat, setManualLat] = useState('');
@@ -52,8 +87,8 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminLoading, setAdminLoading] = useState(true);
-  const [completedElevationGain, setCompletedElevationGain] = useState(0);
-  const [totalElevationGain, setTotalElevationGain] = useState(0);
+  const [completedElevationGain] = useState(0);
+  const [totalElevationGain] = useState(0);
   const [garminEmail, setGarminEmail] = useState('');
   const [garminPassword, setGarminPassword] = useState('');
   const [garminConnected, setGarminConnected] = useState(false);
@@ -156,14 +191,13 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     
     // Set up real-time listeners
     const unsubscribeLocations = locationService.onLocationsUpdate(setLocations);
-    const unsubscribeProgress = locationService.onProgressUpdate(setProgress);
+
     const unsubscribeTimeline = runTimelineService.onTimelineUpdate(setRunTimeline);
     
-    return () => {
-      unsubscribeLocations();
-      unsubscribeProgress();
-      unsubscribeTimeline();
-    };
+          return () => {
+        unsubscribeLocations();
+        unsubscribeTimeline();
+      };
   }, []);
 
   // Load run timeline
@@ -207,6 +241,15 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
       });
       
       alert('✅ Run timeline set successfully!');
+      
+      // Clear previous waypoint completions when setting new timeline
+      try {
+        await waypointCompletionService.clearAllCompletions();
+        console.log('✅ Previous waypoint completions cleared for new timeline');
+      } catch (error) {
+        console.warn('⚠️ Could not clear previous completions:', error);
+      }
+      
       await loadRunTimeline();
     } catch (error) {
       alert('❌ Error setting run timeline: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -216,13 +259,9 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [locationsData, progressData] = await Promise.all([
-        locationService.getLocations(),
-        locationService.getProgress()
-      ]);
+      const locationsData = await locationService.getLocations();
       
       setLocations(locationsData);
-      setProgress(progressData);
       
       if (locationsData.length > 0) {
         setCurrentLocation(locationsData[locationsData.length - 1]);
@@ -269,45 +308,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     loadData();
   };
 
-  const getCurrentProgress = () => {
-    if (!mapTrackProgress || totalDistance <= 0) return 0;
-    const completedDistance = Math.min(mapTrackProgress.completedDistance, totalDistance);
-    return Math.min((completedDistance / totalDistance) * 100, 100);
-  };
 
-  // Calculate elevation gain
-  const getElevationProgress = () => {
-    if (!elevationData || elevationData.length === 0) return { completed: 0, total: 0 };
-    
-    // Calculate total elevation gain
-    let totalElevationGain = 0;
-    for (let i = 1; i < elevationData.length; i++) {
-      const elevationDiff = elevationData[i] - elevationData[i - 1];
-      if (elevationDiff > 0) {
-        totalElevationGain += elevationDiff;
-      }
-    }
-    
-    // Calculate completed elevation gain based on completedPoints (same logic as TrailMap)
-    let completedElevationGain = 0;
-    if (mapTrackProgress?.completedDistance && totalDistance > 0) {
-      // Use the same approach as TrailMap - calculate based on progress ratio
-      const progressRatio = Math.min(mapTrackProgress.completedDistance / totalDistance, 1);
-      const completedPoints = Math.floor(progressRatio * elevationData.length);
-      
-      // Use the length of completed points to determine how many elevation points to include
-      const completedElevations = elevationData.slice(0, completedPoints);
-      
-      for (let i = 1; i < completedElevations.length; i++) {
-        const elevationDiff = completedElevations[i] - completedElevations[i - 1];
-        if (elevationDiff > 0) {
-          completedElevationGain += elevationDiff;
-        }
-      }
-    }
-    
-    return { completed: completedElevationGain, total: totalElevationGain };
-  };
 
   // Connect to Garmin InReach
   const handleGarminConnect = async () => {
@@ -371,15 +372,6 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     // Cleanup on unmount
     return () => clearInterval(interval);
   };
-
-  // Calculate and update elevation values whenever relevant data changes
-  useEffect(() => {
-    if (elevationData && elevationData.length > 0) {
-      const { completed, total } = getElevationProgress();
-      setCompletedElevationGain(completed);
-      setTotalElevationGain(total);
-    }
-  }, [elevationData, mapTrackProgress, totalDistance]);
 
   if (loading && locations.length === 0) {
     return (
@@ -539,25 +531,23 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Timeline sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
-                {mapTrackProgress?.completedDistance ? mapTrackProgress.completedDistance.toFixed(2) : '0.00'} km / {totalDistance.toFixed(2)} km
+                {trackProgress?.completedDistance ? trackProgress.completedDistance.toFixed(2) : '0.00'} km / {totalDistance.toFixed(2)} km
               </Typography>
             </Box>
-            {/* {mapTrackProgress?.completedDistance && mapTrackProgress.completedDistance > totalDistance && (
-              <Typography variant="caption" color="warning.main" display="block">
-                ⚠️ Completed distance exceeds total distance. Using total distance as maximum.
-              </Typography>
-            )} */}
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <TrendingUp sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
-              {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m
+                {elevationData && elevationData.length > 0 && trackProgress ? 
+                  `${Math.round(calculateCompletedElevationGain(elevationData, trackProgress.progressPercentage))} m / ${Math.round(calculateTotalElevationGain(elevationData))} m` : 
+                  '0 m / 0 m'
+                }
               </Typography>
             </Box>
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Speed sx={{ mr: 1, color: 'var(--orange)' }} />
               <Typography variant="body2">
-                {getCurrentProgress().toFixed(1)}% Complet
+                {trackProgress?.progressPercentage ? trackProgress.progressPercentage.toFixed(1) : '0.0'}% Complet
               </Typography>
             </Box>
 
@@ -841,26 +831,46 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                     Set Timeline
                   </Button>
                   {runTimeline && (
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      onClick={async () => {
-                        if (confirm('This will clear the run timeline. Are you sure?')) {
-                          try {
-                            await runTimelineService.clearRunTimeline();
-                            setRunTimeline(null);
-                            setStartRunDate('');
-                            setFinishRunDate('');
-                            alert('✅ Run timeline cleared!');
-                          } catch (error) {
-                            alert('❌ Error clearing timeline: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                    <>
+                      <Button
+                        variant="outlined"
+                        color="warning"
+                        onClick={async () => {
+                          if (confirm('This will clear all waypoint completions and start fresh. Are you sure?')) {
+                            try {
+                              await waypointCompletionService.clearAllCompletions();
+                              alert('✅ All waypoint completions cleared! Ready for fresh start.');
+                            } catch (error) {
+                              alert('❌ Error clearing completions: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                            }
                           }
-                        }
-                      }}
-                      size="small"
-                    >
-                      Clear
-                    </Button>
+                        }}
+                        size="small"
+                        sx={{ mr: 1 }}
+                      >
+                        Clear Completions
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={async () => {
+                          if (confirm('This will clear the run timeline. Are you sure?')) {
+                            try {
+                              await runTimelineService.clearRunTimeline();
+                              setRunTimeline(null);
+                              setStartRunDate('');
+                              setFinishRunDate('');
+                              alert('✅ Run timeline cleared!');
+                            } catch (error) {
+                              alert('❌ Error clearing timeline: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                            }
+                          }
+                        }}
+                        size="small"
+                      >
+                        Clear Timeline
+                      </Button>
+                    </>
                   )}
                 </Grid>
               </Grid>

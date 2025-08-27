@@ -496,7 +496,6 @@ Iar eu alerg pentru fiecare mesaj în parte.
 
                 {/* Garmin InReach Tracker */}
                 <GarminTracker 
-          trailPoints={[]} // This will be populated from GPX data
           totalDistance={trackProgress?.totalDistance || totalDistance}
           trackProgress={trackProgress}
           elevationData={elevationData}

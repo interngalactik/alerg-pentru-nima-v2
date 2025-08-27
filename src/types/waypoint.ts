@@ -11,6 +11,10 @@ export interface Waypoint {
   eta?: string; // Estimated time of arrival
   startDate?: string; // Start date for finish/start waypoints
   startTime?: string; // Start time for finish/start waypoints
+  // Completion tracking
+  isCompleted?: boolean;
+  completedAt?: number; // Timestamp when completed
+  completedBy?: string; // Who marked it as completed
   createdAt: string;
   updatedAt: string;
   createdBy: string;

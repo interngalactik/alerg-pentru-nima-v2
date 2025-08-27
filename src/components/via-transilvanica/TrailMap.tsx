@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Box, Typography, Paper, Button, CircularProgress } from '@mui/material';
-import { LocationOn, Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { LocationOn, Delete as DeleteIcon } from '@mui/icons-material';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { parseGPX, ParsedGPX, GPXTrack, calculateDistance } from '@/lib/gpxParser';
@@ -11,6 +11,7 @@ import { WaypointService } from '../../lib/waypointService';
 import { AdminAuthService } from '../../lib/adminAuthService';
 import { locationService, LocationPoint } from '../../lib/locationService';
 import { runTimelineService } from '../../lib/runTimelineService';
+import { waypointCompletionService } from '../../lib/waypointCompletionService';
 import WaypointForm from './WaypointForm';
 import { ref, set, get } from 'firebase/database';
 import { database } from '../../lib/firebase';
@@ -54,8 +55,9 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [finishDate, setFinishDate] = useState<Date>(new Date('2025-09-25'));
   const [finishTime, setFinishTime] = useState<string>('18:00');
   const [isRunActive, setIsRunActive] = useState(false);
-  const [runTimeline, setRunTimeline] = useState<any>(null);
-  const mapRef = useRef<any>(null);
+  const [runTimeline, setRunTimeline] = useState<{ startDate: string; finishDate: string; startTime: string; finishTime: string } | null>(null);
+  const [waypointCompletions, setWaypointCompletions] = useState<Record<string, { completedAt: number; completedBy: string }>>({});
+  const mapRef = useRef<L.Map | null>(null);
   const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
 
   // Get all route points from GPX tracks
@@ -358,6 +360,27 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     return currentClosestIndex > waypointClosestIndex;
   };
 
+  // Enhanced waypoint completion check that considers both physical passage and run timeline
+  const isWaypointCompleted = (waypoint: Waypoint): boolean => {
+    // If waypoint is explicitly marked as completed, show it as completed
+    if (waypoint.isCompleted) {
+      return true;
+    }
+    
+    // If no run timeline, no waypoints can be completed
+    if (!runTimeline) {
+      return false;
+    }
+    
+    // If run is not active, only show previously completed waypoints
+    if (!isRunActive) {
+      return waypoint.isCompleted || false;
+    }
+    
+    // During active run, check if physically passed
+    return hasPassedWaypoint(waypoint.coordinates);
+  };
+
 
 
   // Get start and end points from GPX data
@@ -365,27 +388,54 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     return allRoutePoints.length > 0 ? allRoutePoints[0] : null;
   }, [allRoutePoints]);
 
-  // Check if run is currently active
+  // Check if run is currently active and load waypoint completions
   useEffect(() => {
     const checkRunStatus = async () => {
       try {
         const timeline = await runTimelineService.getRunTimeline();
         setRunTimeline(timeline);
         if (timeline) {
-          setIsRunActive(runTimelineService.isRunActive(timeline));
+          const active = runTimelineService.isRunActive(timeline);
+          // console.log('🔄 Run status check:', { timeline, active });
+          setIsRunActive(active);
+        } else {
+          console.log('⚠️ No run timeline found');
         }
       } catch (error) {
         console.error('Error checking run status:', error);
       }
     };
     
+    const loadCompletions = async () => {
+      try {
+        const completions = await waypointCompletionService.getWaypointCompletions();
+        setWaypointCompletions(completions);
+      } catch (error) {
+        console.warn('⚠️ Waypoint completions not available (permission issue):', error);
+        // Set empty completions on error - this is expected during development
+        setWaypointCompletions({});
+      }
+    };
+    
     checkRunStatus();
-    const interval = setInterval(checkRunStatus, 60000); // Check every minute
-    return () => clearInterval(interval);
+    loadCompletions();
+    
+    // Check run status every 5 minutes instead of every minute to reduce loops
+    const interval = setInterval(checkRunStatus, 300000); // Check every 5 minutes
+    const completionsUnsubscribe = waypointCompletionService.onCompletionsUpdate(setWaypointCompletions);
+    
+    return () => {
+      clearInterval(interval);
+      completionsUnsubscribe();
+    };
   }, []); // Empty dependency array to prevent infinite loop
 
   // Calculate progress along the track based on current location
   const trackProgress = useMemo(() => {
+    // Only log when values actually change to reduce spam
+    const hasGpxData = !!gpxData;
+    const hasLocation = !!currentLocationPoint;
+    
     // If run is not active, show no progress
     if (!isRunActive) {
       return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
@@ -445,7 +495,44 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       totalDistance,
       progressPercentage
     };
-  }, [gpxData, currentLocationPoint]);
+  }, [gpxData, currentLocationPoint, isRunActive]);
+
+  // Function to check and mark waypoints as completed
+  const checkWaypointCompletions = useCallback(async () => {
+    if (!runTimeline || !isRunActive || !currentLocationPoint) return;
+    
+    try {
+      for (const waypoint of sortedWaypoints) {
+        // Skip already completed waypoints
+        if (waypoint.isCompleted) continue;
+        
+        // Check if waypoint should be marked as completed
+        const shouldComplete = hasPassedWaypoint(waypoint.coordinates);
+        
+        if (shouldComplete) {
+          console.log(`🎯 Marking waypoint ${waypoint.name} as completed`);
+          await waypointCompletionService.markWaypointCompleted(
+            waypoint.id,
+            'auto',
+            runTimeline
+          );
+        }
+      }
+      
+      // Refresh completions
+      const completions = await waypointCompletionService.getWaypointCompletions();
+      setWaypointCompletions(completions);
+    } catch (error) {
+      console.error('❌ Error checking waypoint completions:', error);
+    }
+  }, [runTimeline, isRunActive, currentLocationPoint, sortedWaypoints]);
+
+  // Watch for location changes and check waypoint completions
+  useEffect(() => {
+    if (runTimeline && isRunActive && currentLocationPoint) {
+      checkWaypointCompletions();
+    }
+  }, [currentLocationPoint, checkWaypointCompletions]);
 
   // Manual end point coordinates for Via Transilvanica
   const endPoint: [number, number] = [44.624535, 22.666960];
@@ -679,7 +766,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
     // Wait for Leaflet to be available
     const checkLeaflet = () => {
-      if (typeof window !== 'undefined' && (window as any).L) {
+      if (typeof window !== 'undefined' && (window as typeof window & { L: typeof L }).L) {
         setLeafletLoaded(true);
       } else {
         setTimeout(checkLeaflet, 100);
@@ -725,24 +812,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     };
   }, []);
 
-  // Safe icon creation function
-  const createIcon = (iconUrl: string, size: [number, number], anchor: [number, number], popupAnchor: [number, number]) => {
-    if (leafletLoaded && (window as any).L) {
-      return new (window as any).L.Icon({
-        iconUrl,
-        iconSize: size,
-        iconAnchor: anchor,
-        popupAnchor
-      });
-    }
-    return undefined;
-  };
 
-  const centerMap = () => {
-    if (mapRef.current) {
-      mapRef.current.setView([currentLocation.lat, currentLocation.lng], 10);
-    }
-  };
 
   const centerOnCurrentLocation = () => {
     if (mapRef.current && currentLocationPoint) {
@@ -758,7 +828,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       ];
       
       if (allPoints.length > 0) {
-        const bounds = (window as any).L.latLngBounds(allPoints);
+        const bounds = (window as typeof window & { L: typeof L }).L.latLngBounds(allPoints);
         mapRef.current.fitBounds(bounds);
       }
     }
@@ -802,7 +872,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           setFinishDate(finishDate);
         }
         if (data.finishTime) setFinishTime(data.finishTime);
-        console.log('Start/finish dates loaded from Firebase');
+        // console.log('Start/finish dates loaded from Firebase');
       }
     } catch (error) {
       console.error('Error loading start/finish dates:', error);
@@ -1480,7 +1550,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             Math.abs(waypoint.coordinates.lat) > 0.001 && 
             Math.abs(waypoint.coordinates.lng) > 0.001
           )
-          .map((waypoint, index) => (
+          .map((waypoint, index) => {
+            const isCompleted = isWaypointCompleted(waypoint);
+            const completion = waypointCompletions[waypoint.id];
+            
+            return (
         <Marker 
             key={`${waypoint.id}-${waypointsTimestamp}`}
             position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
@@ -1545,15 +1619,46 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   </Box>
                 )}
                 
+                {/* Completion Status */}
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1,
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: isCompleted ? 'rgba(76, 175, 80, 0.1)' : 'rgba(158, 158, 158, 0.1)',
+                    border: `1px solid ${isCompleted ? 'rgba(76, 175, 80, 0.3)' : 'rgba(158, 158, 158, 0.3)'}`
+                  }}>
+                    <Box sx={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      backgroundColor: isCompleted ? '#4CAF50' : '#9E9E9E'
+                    }} />
+                    <Typography variant="caption" sx={{ 
+                      color: isCompleted ? 'success.main' : 'text.secondary',
+                      fontWeight: 'bold'
+                    }}>
+                      {isCompleted ? '✅ Etapă completată' : '⏳ În așteptare'}
+                    </Typography>
+                    {completion && completion.completedAt && (
+                      <Typography variant="caption" sx={{ color: 'text.secondary', ml: 'auto' }}>
+                        {new Date(completion.completedAt).toLocaleDateString('ro-RO')}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+
                 {/* Distance Information */}
                 {(() => {
                   const distanceInfo = calculateDistanceFromLastWaypoint(index);
-                  const hasPassed = hasPassedWaypoint(waypoint.coordinates);
+                  const isCompleted = isWaypointCompleted(waypoint);
                   
                   return (
                     <>
-                      {/* Distance and Elevation from current location - only show if not passed */}
-                      {currentLocationPoint && !hasPassed && (
+                      {/* Distance and Elevation from current location - only show if not completed */}
+                      {currentLocationPoint && !isCompleted && (
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
                             <strong>Distanță de la locația curentă:</strong> {calculateDistanceToWaypoint(waypoint.coordinates).toFixed(2)} km
@@ -1595,11 +1700,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                       )}
                       
                       {/* Show if waypoint has been passed */}
-                      {hasPassed && (
+                      {/* {isCompleted && (
                         <Typography variant="caption" sx={{ color: 'success.main', display: 'block', mb: 1, fontStyle: 'italic' }}>
                           ✅ <strong>Etapă completată</strong>
                         </Typography>
-                      )}
+                      )} */}
                       
 
                     </>
@@ -1627,6 +1732,34 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   
                   {isAdmin && (
                     <>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color={isCompleted ? "warning" : "success"}
+                        onClick={async () => {
+                          try {
+                            if (isCompleted) {
+                              await waypointCompletionService.markWaypointIncomplete(waypoint.id);
+                            } else if (runTimeline) {
+                              await waypointCompletionService.markWaypointCompleted(
+                                waypoint.id, 
+                                'admin', 
+                                runTimeline
+                              );
+                            }
+                            // Refresh waypoint completions
+                            const completions = await waypointCompletionService.getWaypointCompletions();
+                            setWaypointCompletions(completions);
+                          } catch (error) {
+                            console.error('Error toggling waypoint completion:', error);
+                            alert('Error updating waypoint completion');
+                          }
+                        }}
+                        sx={{ fontSize: '0.75rem' }}
+                      >
+                        {isCompleted ? '🔄 Marchează ca incomplet' : '✅ Marchează ca complet'}
+                      </Button>
+                      
                       <Button
                         size="small"
                         variant="outlined"
@@ -1664,7 +1797,8 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               </Box>
           </Popup>
         </Marker>
-      ))}
+        );
+      })}
 
         {/* Elevation cursor position pin */}
         {elevationCursorPosition && (
@@ -1970,7 +2104,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             />
           </Box>
         </Paper>
-        )}
+      )}
 
       {/* Legend */}
       <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
