@@ -26,6 +26,7 @@ import { locationService, LocationPoint } from '@/lib/locationService';
 import { TrailProgress } from '@/lib/trailProgressService';
 import { AdminAuthService } from '@/lib/adminAuthService';
 import { GarminService } from '@/lib/garminService';
+import { runTimelineService, RunTimeline } from '@/lib/runTimelineService';
 
 interface GarminTrackerProps {
   trailPoints: [number, number][];
@@ -58,6 +59,11 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   const [garminConnected, setGarminConnected] = useState(false);
   const [garminConnecting, setGarminConnecting] = useState(false);
   const [garminError, setGarminError] = useState<string | null>(null);
+  const [runTimeline, setRunTimeline] = useState<RunTimeline | null>(null);
+  const [startRunDate, setStartRunDate] = useState('');
+  const [startRunTime, setStartRunTime] = useState('08:00');
+  const [finishRunDate, setFinishRunDate] = useState('');
+  const [finishRunTime, setFinishRunTime] = useState('18:00');
   
   // Create Garmin service instance (use useRef to maintain instance across renders)
   const garminServiceRef = useRef<GarminService | null>(null);
@@ -100,16 +106,62 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   // Load initial data
   useEffect(() => {
     loadData();
+    loadRunTimeline();
     
     // Set up real-time listeners
     const unsubscribeLocations = locationService.onLocationsUpdate(setLocations);
     const unsubscribeProgress = locationService.onProgressUpdate(setProgress);
+    const unsubscribeTimeline = runTimelineService.onTimelineUpdate(setRunTimeline);
     
     return () => {
       unsubscribeLocations();
       unsubscribeProgress();
+      unsubscribeTimeline();
     };
   }, []);
+
+  // Load run timeline
+  const loadRunTimeline = async () => {
+    try {
+      const timeline = await runTimelineService.getRunTimeline();
+      setRunTimeline(timeline);
+      if (timeline) {
+        setStartRunDate(timeline.startDate);
+        setStartRunTime(timeline.startTime);
+        setFinishRunDate(timeline.finishDate);
+        setFinishRunTime(timeline.finishTime);
+      }
+    } catch (error) {
+      console.error('Error loading run timeline:', error);
+    }
+  };
+
+  // Set run timeline
+  const handleSetRunTimeline = async () => {
+    if (!startRunDate || !finishRunDate) {
+      alert('Please set both start and finish dates');
+      return;
+    }
+
+    if (new Date(startRunDate) >= new Date(finishRunDate)) {
+      alert('Finish date must be after start date');
+      return;
+    }
+
+    try {
+      await runTimelineService.setRunTimeline({
+        startDate: startRunDate,
+        startTime: startRunTime,
+        finishDate: finishRunDate,
+        finishTime: finishRunTime
+      });
+      
+      alert('✅ Run timeline set successfully!');
+      await loadRunTimeline();
+    } catch (error) {
+      alert('❌ Error setting run timeline: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -255,6 +307,11 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             elevation: result.location.elevation,
             accuracy: result.location.accuracy
           });
+          
+          // Refresh progress data after adding new location
+          setTimeout(() => {
+            loadData();
+          }, 2000); // Wait 2 seconds for webhook to process
         }
       } catch (error) {
         console.error('Error updating location from Garmin:', error);
@@ -285,19 +342,28 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography variant="h6" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
-          <MyLocation sx={{ mr: 1, verticalAlign: 'middle' }} />
-          Tracking
-          {garminConnected && (
-            <Chip 
-              label="InReach Connected" 
-              size="small" 
-              color="success" 
-              variant="outlined"
-              sx={{ ml: 1 }}
-            />
-          )}
-        </Typography>
+                    <Typography variant="h6" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
+              <MyLocation sx={{ mr: 1, verticalAlign: 'middle' }} />
+              Tracking
+              {garminConnected && (
+                <Chip 
+                  label="InReach Connected" 
+                  size="small" 
+                  color="success" 
+                  variant="outlined"
+                  sx={{ ml: 1 }}
+                />
+              )}
+              {runTimeline && (
+                <Chip 
+                  label={runTimelineService.getRunStatus(runTimeline)}
+                  size="small" 
+                  color={runTimelineService.isRunActive(runTimeline) ? "success" : "default"}
+                  variant="outlined"
+                  sx={{ ml: 1 }}
+                />
+              )}
+            </Typography>
 
         <Tooltip title="Refresh tracking data">
           <span>
@@ -306,6 +372,26 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             </IconButton>
           </span>
         </Tooltip>
+        {isAdmin && (
+          <Tooltip title="Force refresh progress data">
+            <span>
+              <IconButton 
+                onClick={async () => {
+                  try {
+                    await loadData();
+                    alert('✅ Progress data refreshed!');
+                  } catch (error) {
+                    alert('❌ Error refreshing: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                  }
+                }} 
+                disabled={loading}
+                sx={{ ml: 1 }}
+              >
+                <Refresh color="primary" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
       </Box>
 
       {error && (
@@ -474,6 +560,11 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                             accuracy: result.location.accuracy
                           });
                           alert('✅ Location fetched successfully!\nLat: ' + result.location.latitude.toFixed(6) + '\nLng: ' + result.location.longitude.toFixed(6));
+                          
+                          // Refresh progress data after adding new location
+                          setTimeout(() => {
+                            loadData();
+                          }, 2000); // Wait 2 seconds for webhook to process
                         } else {
                           alert('❌ No location data available: ' + (result.message || 'Unknown error'));
                         }
@@ -541,8 +632,34 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                         setGarminError(null);
                       }}
                       size="small"
+                      sx={{ mr: 1 }}
                     >
                       Clear Fields
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      onClick={async () => {
+                        if (confirm('This will clear all test location data and start fresh. Are you sure?')) {
+                          try {
+                            // Clear all locations from Firebase
+                            const locations = await locationService.getLocations();
+                            for (const location of locations) {
+                              await locationService.deleteLocation(location.id);
+                            }
+                            // Clear progress
+                            await locationService.clearProgress();
+                            // Reload data
+                            await loadData();
+                            alert('✅ All test data cleared! Ready for fresh start.');
+                          } catch (error) {
+                            alert('❌ Error clearing data: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                          }
+                        }
+                      }}
+                      size="small"
+                    >
+                      Clear Test Data
                     </Button>
                   </Grid>
                 </Grid>
@@ -550,6 +667,110 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
               
               <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                 Connect your Garmin InReach Messenger using your IPC v2 API key for automatic location updates every 10 minutes
+              </Typography>
+            </Paper>
+          </Grid>
+        )}
+
+        {/* Run Timeline Management - Admin Only */}
+        {!adminLoading && isAdmin && (
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, backgroundColor: 'rgba(156, 39, 176, 0.05)' }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, color: 'var(--blue)' }}>
+                Run Timeline Management
+              </Typography>
+              
+              {runTimeline && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  <strong>Current Status:</strong> {runTimelineService.getRunStatus(runTimeline)}
+                  <br />
+                  <strong>Start Date:</strong> {new Date(runTimeline.startDate).toLocaleDateString()}
+                  <br />
+                  <strong>Finish Date:</strong> {new Date(runTimeline.finishDate).toLocaleDateString()}
+                </Alert>
+              )}
+              
+              <Grid container spacing={2} alignItems="center">
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label="Start Date"
+                    type="date"
+                    value={startRunDate}
+                    onChange={(e) => setStartRunDate(e.target.value)}
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={2}>
+                  <TextField
+                    label="Start Time"
+                    type="time"
+                    value={startRunTime}
+                    onChange={(e) => setStartRunTime(e.target.value)}
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <TextField
+                    label="Finish Date"
+                    type="date"
+                    value={finishRunDate}
+                    onChange={(e) => setFinishRunDate(e.target.value)}
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={2}>
+                  <TextField
+                    label="Finish Time"
+                    type="time"
+                    value={finishRunTime}
+                    onChange={(e) => setFinishRunTime(e.target.value)}
+                    size="small"
+                    fullWidth
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={2}>
+                  <Button
+                    variant="contained"
+                    onClick={handleSetRunTimeline}
+                    disabled={!startRunDate || !finishRunDate}
+                    sx={{ backgroundColor: 'var(--purple)', mr: 1 }}
+                  >
+                    Set Timeline
+                  </Button>
+                  {runTimeline && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={async () => {
+                        if (confirm('This will clear the run timeline. Are you sure?')) {
+                          try {
+                            await runTimelineService.clearRunTimeline();
+                            setRunTimeline(null);
+                            setStartRunDate('');
+                            setFinishRunDate('');
+                            alert('✅ Run timeline cleared!');
+                          } catch (error) {
+                            alert('❌ Error clearing timeline: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                          }
+                        }
+                      }}
+                      size="small"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </Grid>
+              </Grid>
+              
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                Set the start and finish dates for your Via Transilvanica run. Progress will only be tracked during this period.
               </Typography>
             </Paper>
           </Grid>

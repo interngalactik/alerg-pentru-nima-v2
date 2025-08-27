@@ -168,6 +168,16 @@ export class LocationService {
 
     await this.addLocation(location);
   }
+
+  // Delete a specific location
+  async deleteLocation(id: string): Promise<void> {
+    await set(ref(database, `locations/${id}`), null);
+  }
+
+  // Clear all progress data
+  async clearProgress(): Promise<void> {
+    await set(ref(database, 'trailProgress'), null);
+  }
 }
 
 export const locationService = new LocationService(); 
