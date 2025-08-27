@@ -74,6 +74,28 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
   }
   
   const garminService = garminServiceRef.current;
+
+  // Auto-configure Garmin service with API key from environment
+  useEffect(() => {
+    const configureGarminService = async () => {
+      try {
+        // Try to get API key from environment variables
+        // Note: In Next.js, environment variables need to be prefixed with NEXT_PUBLIC_ to be available in browser
+        const apiKey = process.env.NEXT_PUBLIC_GARMIN_API_KEY || process.env.GARMIN_API_KEY;
+        
+        if (apiKey) {
+          garminService.setApiKey(apiKey);
+          setGarminConnected(true);
+        } else {
+          console.log('⚠️ No GARMIN_API_KEY found in environment');
+        }
+      } catch (error) {
+        console.error('❌ Error auto-configuring Garmin service:', error);
+      }
+    };
+    
+    configureGarminService();
+  }, [garminService]);
   
   // These elevation variables are now available throughout the component:
   // - completedElevationGain: Current elevation gain based on progress
@@ -103,6 +125,30 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     };
   }, []);
 
+  // Automatic location fetching every 10 minutes (since Garmin updates every 10 minutes)
+  useEffect(() => {
+    const fetchLocationInterval = setInterval(async () => {
+      try {
+        // Only fetch if we have a Garmin service configured
+        if (garminService && garminService.isAuthenticated()) {
+          console.log('🔄 Auto-fetching location from Garmin...');
+          const result = await garminService.getCurrentLocation();
+          if (result.success && result.location) {
+            console.log('✅ Auto-fetched location:', result.location);
+            // Reload data to show new location
+            await loadData();
+          } else {
+            console.log('⚠️ Auto-fetch failed:', result.message);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error in auto-fetch:', error);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+
+    return () => clearInterval(fetchLocationInterval);
+  }, [garminService]);
+
   // Load initial data
   useEffect(() => {
     loadData();
@@ -126,9 +172,13 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
       const timeline = await runTimelineService.getRunTimeline();
       setRunTimeline(timeline);
       if (timeline) {
-        setStartRunDate(timeline.startDate);
+        // Convert ISO dates to yyyy-MM-dd format for input fields
+        const startDate = new Date(timeline.startDate);
+        const finishDate = new Date(timeline.finishDate);
+        
+        setStartRunDate(startDate.toISOString().split('T')[0]);
         setStartRunTime(timeline.startTime);
-        setFinishRunDate(timeline.finishDate);
+        setFinishRunDate(finishDate.toISOString().split('T')[0]);
         setFinishRunTime(timeline.finishTime);
       }
     } catch (error) {
@@ -345,7 +395,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                     <Typography variant="h6" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
               <MyLocation sx={{ mr: 1, verticalAlign: 'middle' }} />
               Tracking
-              {garminConnected && (
+              {isAdmin && garminConnected && (
                 <Chip 
                   label="InReach Connected" 
                   size="small" 
@@ -354,7 +404,7 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                   sx={{ ml: 1 }}
                 />
               )}
-              {runTimeline && (
+              {isAdmin && runTimeline && (
                 <Chip 
                   label={runTimelineService.getRunStatus(runTimeline)}
                   size="small" 
@@ -365,13 +415,15 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
               )}
             </Typography>
 
-        <Tooltip title="Refresh tracking data">
-          <span>
-            <IconButton onClick={handleRefresh} disabled={loading}>
-              <Refresh />
-            </IconButton>
-          </span>
-        </Tooltip>
+        {isAdmin && (
+          <Tooltip title="Refresh tracking data">
+            <span>
+              <IconButton onClick={handleRefresh} disabled={loading}>
+                <Refresh />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         {isAdmin && (
           <Tooltip title="Force refresh progress data">
             <span>
@@ -388,6 +440,50 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
                 sx={{ ml: 1 }}
               >
                 <Refresh color="primary" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+        
+        {/* Manual Location Refresh Button - Admin Only */}
+        {isAdmin && (
+          <Tooltip title="Manually fetch current location from Garmin">
+            <span>
+              <IconButton 
+                onClick={async () => {
+                  try {
+                    setLoading(true);
+                    console.log('🔄 Manually fetching location from Garmin...');
+                    
+                    // First, request a fresh location update from the device
+                    console.log('📡 Requesting fresh location update from InReach device...');
+                    const updateResult = await garminService.requestLocationUpdate();
+                    console.log('📡 Location update request result:', updateResult);
+                    
+                    // Wait a moment for the device to process
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Now fetch the current location
+                    const result = await garminService.getCurrentLocation();
+                    if (result.success && result.location) {
+                      console.log('✅ Manual fetch successful:', result.location);
+                      await loadData();
+                      alert('✅ Location refreshed from Garmin!');
+                    } else {
+                      console.log('⚠️ Manual fetch failed:', result.message);
+                      alert('⚠️ Failed to fetch location: ' + result.message);
+                    }
+                  } catch (error) {
+                    console.error('❌ Error in manual fetch:', error);
+                    alert('❌ Error fetching location: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                  } finally {
+                    setLoading(false);
+                  }
+                }} 
+                disabled={loading}
+                sx={{ ml: 1 }}
+              >
+                <MyLocation color="secondary" />
               </IconButton>
             </span>
           </Tooltip>

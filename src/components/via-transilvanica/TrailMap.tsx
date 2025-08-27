@@ -10,6 +10,7 @@ import { Waypoint, WaypointFormData } from '../../types/waypoint';
 import { WaypointService } from '../../lib/waypointService';
 import { AdminAuthService } from '../../lib/adminAuthService';
 import { locationService, LocationPoint } from '../../lib/locationService';
+import { runTimelineService } from '../../lib/runTimelineService';
 import WaypointForm from './WaypointForm';
 import { ref, set, get } from 'firebase/database';
 import { database } from '../../lib/firebase';
@@ -52,6 +53,8 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [startTime, setStartTime] = useState<string>('07:00');
   const [finishDate, setFinishDate] = useState<Date>(new Date('2025-09-25'));
   const [finishTime, setFinishTime] = useState<string>('18:00');
+  const [isRunActive, setIsRunActive] = useState(false);
+  const [runTimeline, setRunTimeline] = useState<any>(null);
   const mapRef = useRef<any>(null);
   const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
 
@@ -362,8 +365,32 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     return allRoutePoints.length > 0 ? allRoutePoints[0] : null;
   }, [allRoutePoints]);
 
+  // Check if run is currently active
+  useEffect(() => {
+    const checkRunStatus = async () => {
+      try {
+        const timeline = await runTimelineService.getRunTimeline();
+        setRunTimeline(timeline);
+        if (timeline) {
+          setIsRunActive(runTimelineService.isRunActive(timeline));
+        }
+      } catch (error) {
+        console.error('Error checking run status:', error);
+      }
+    };
+    
+    checkRunStatus();
+    const interval = setInterval(checkRunStatus, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []); // Empty dependency array to prevent infinite loop
+
   // Calculate progress along the track based on current location
   const trackProgress = useMemo(() => {
+    // If run is not active, show no progress
+    if (!isRunActive) {
+      return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
+    }
+    
     if (!gpxData || !currentLocationPoint || gpxData.tracks.length === 0) {
       return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
     }
@@ -765,9 +792,15 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       
       if (snapshot.exists()) {
         const data = snapshot.val();
-        if (data.startDate) setStartDate(new Date(data.startDate));
+        if (data.startDate) {
+          const startDate = new Date(data.startDate);
+          setStartDate(startDate);
+        }
         if (data.startTime) setStartTime(data.startTime);
-        if (data.finishDate) setFinishDate(new Date(data.finishDate));
+        if (data.finishDate) {
+          const finishDate = new Date(data.finishDate);
+          setFinishDate(finishDate);
+        }
         if (data.finishTime) setFinishTime(data.finishTime);
         console.log('Start/finish dates loaded from Firebase');
       }
@@ -902,6 +935,14 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
             {trackProgress.progressPercentage > 0 ? trackProgress.progressPercentage.toFixed(1) : progress.toFixed(1)}% complet
             </Typography>
+            
+            {/* Run Status Indicator */}
+            <Typography variant="caption" color={isRunActive ? "success.main" : "text.disabled"} sx={{ display: 'block', mb: 1 }}>
+              {isRunActive ? "🏃‍♂️ Run Active" : "⏸️ Run Paused"}
+              {runTimeline && !isRunActive && " (Outside run period)"}
+              {!runTimeline && " (No timeline set)"}
+            </Typography>
+            
           <Typography variant="caption" color="text.secondary">
             {trackProgress.completedDistance > 0 ? trackProgress.completedDistance.toFixed(2) : completedDistance.toFixed(2)} / {trackProgress.totalDistance > 0 ? trackProgress.totalDistance.toFixed(2) : '1400'} km
             </Typography>

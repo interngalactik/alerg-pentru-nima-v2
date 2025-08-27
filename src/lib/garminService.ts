@@ -12,15 +12,15 @@ export class GarminService {
     if (tenantUrl) {
       this.baseUrl = `${tenantUrl}/api`;
     }
-    console.log('🔑 API key set for Garmin IPC v2 Inbound API');
-    console.log('🔑 Base URL:', this.baseUrl);
+    // console.log('🔑 API key set for Garmin IPC v2 Inbound API');
+    // console.log('🔑 Base URL:', this.baseUrl);
   }
 
   // Authenticate with Garmin IPC v2 using API key
   async authenticate(credentials: GarminCredentials): Promise<{ success: boolean; message: string; token?: string; instructions?: string[] }> {
     try {
-      console.log('🔐 Starting Garmin IPC v2 API Key authentication...');
-      console.log('🔐 Email:', credentials.email);
+      // console.log('🔐 Starting Garmin IPC v2 API Key authentication...');
+      // console.log('🔐 Email:', credentials.email);
       
       // According to the v2 documentation, we need to:
       // 1. Log into https://explore.garmin.com/
@@ -28,15 +28,15 @@ export class GarminService {
       // 3. Toggle Inbound Settings to ON
       // 4. Generate an API Key
       
-      console.log('🔐 This authentication method requires manual API key generation');
-      console.log('🔐 Please follow these steps:');
-      console.log('🔐 1. Log into https://explore.garmin.com/');
-      console.log('🔐 2. Click Admin Controls');
-      console.log('🔐 3. Click on Portal Connect');
-      console.log('🔐 4. Toggle the Inbound Settings slider to ON');
-      console.log('🔐 5. Enter a username and password and click Save');
-      console.log('🔐 6. Click Generate API Key');
-      console.log('🔐 7. Copy the generated API key');
+      // console.log('🔐 This authentication method requires manual API key generation');
+      // console.log('🔐 Please follow these steps:');
+      // console.log('🔐 1. Log into https://explore.garmin.com/');
+      // console.log('🔐 2. Click Admin Controls');
+      // console.log('🔐 3. Click on Portal Connect');
+      // console.log('🔐 4. Toggle the Inbound Settings slider to ON');
+      // console.log('🔐 5. Enter a username and password and click Save');
+      // console.log('🔐 6. Click Generate API Key');
+      // console.log('🔐 7. Copy the generated API key');
       
       return { 
         success: false, 
@@ -117,7 +117,7 @@ export class GarminService {
         throw new Error('Not authenticated. Please set API key first using setApiKey() method.');
       }
 
-      console.log('📡 Fetching tracking status via backend proxy for IPC v2 API...');
+      // console.log('📡 Fetching tracking status via backend proxy for IPC v2 API...');
       
       // Use our backend proxy to avoid CORS issues with the v2 API
       const response = await fetch('/api/garmin/explore/location', {
@@ -137,7 +137,7 @@ export class GarminService {
       }
 
       const result = await response.json();
-      console.log('📡 Tracking status proxy response:', result);
+      // console.log('📡 Tracking status proxy response:', result);
 
       if (result.success) {
         return { success: true, message: 'Tracking status retrieved', tracking: result.data };
@@ -158,7 +158,7 @@ export class GarminService {
         throw new Error('Not authenticated. Please set API key first using setApiKey() method.');
       }
 
-      console.log('📡 Requesting immediate location update via backend proxy for IPC v2 API...');
+      // console.log('📡 Requesting immediate location update via backend proxy for IPC v2 API...');
       
       // Use our backend proxy to avoid CORS issues with the v2 API
       const response = await fetch('/api/garmin/explore/location', {
@@ -178,7 +178,7 @@ export class GarminService {
       }
 
       const result = await response.json();
-      console.log('📡 Location update proxy response:', result);
+      // console.log('📡 Location update proxy response:', result);
 
       if (result.success) {
         return { success: true, message: 'Location update requested successfully' };
