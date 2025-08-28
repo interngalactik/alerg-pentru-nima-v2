@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import { 
   LocationOn, 
-  MyLocation
+  MyLocation,
+  Logout
 } from '@mui/icons-material';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -21,6 +22,8 @@ import CryptoJS from 'crypto-js';
 import { STRAVA_CALL_REFRESH, STRAVA_CALL_ACTIVITIES } from '@/lib/constants';
 import { parseGPX, ParsedGPX } from '@/lib/gpxParser';
 import { LocationPoint } from '@/lib/locationService';
+import { AdminAuthService } from '@/lib/adminAuthService';
+import { runTimelineService } from '@/lib/runTimelineService';
 
 
 // Dynamically import the map component to avoid SSR issues
@@ -46,12 +49,72 @@ const ViaTransilvanicaPage = () => {
   const [startDate, setStartDate] = useState(new Date());
   const [gpxData, setGpxData] = useState<ParsedGPX | null>(null);
   const [actualStartPoint, setActualStartPoint] = useState<[number, number] | null>(null);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [timelineLoaded, setTimelineLoaded] = useState(false);
 
 
   // Set client-side flag after mount to prevent hydration issues
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Check admin status on mount
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      try {
+        const status = await AdminAuthService.isAdminLoggedIn();
+        setIsAdminLoggedIn(status);
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdminLoggedIn(false);
+      }
+    };
+    
+    if (isClient) {
+      checkAdminStatus();
+    }
+  }, [isClient]);
+
+  // Load run timeline to get the correct start date (only once)
+  useEffect(() => {
+    if (!isClient || timelineLoaded) return;
+    
+    const loadRunTimeline = async () => {
+      try {
+        const timeline = await runTimelineService.getRunTimeline();
+        
+        if (timeline) {
+          
+          // Extract just the date part (YYYY-MM-DD) from the ISO string
+          const startDateOnly = timeline.startDate.split('T')[0];
+          const startDateTime = new Date(startDateOnly + 'T' + timeline.startTime);
+          
+          // Check if the date is valid
+          if (isNaN(startDateTime.getTime())) {
+            console.error('Invalid date constructed, using default');
+            const defaultStartDate = new Date('2025-09-01T00:00:00');
+            setStartDate(defaultStartDate);
+          } else {
+            setStartDate(startDateTime);
+            // console.log('Loaded run timeline start date:', startDateTime);
+          }
+        } else {
+          console.log('No timeline found, using default date');
+          // Set a default start date (September 1, 2025)
+          const defaultStartDate = new Date('2025-09-01T00:00:00');
+          setStartDate(defaultStartDate);
+          console.log('Set default start date:', defaultStartDate);
+        }
+        
+        setTimelineLoaded(true);
+      } catch (error) {
+        console.error('Error loading run timeline:', error);
+        setTimelineLoaded(true);
+      }
+    };
+    
+    loadRunTimeline();
+  }, [isClient, timelineLoaded]);
 
   // Update current date every second for countdown
   useEffect(() => {
@@ -289,6 +352,45 @@ const ViaTransilvanicaPage = () => {
   return (
     <>
       <Navigation />
+      
+      {/* Admin Logout Button - Only show when admin is logged in */}
+      {isAdminLoggedIn && (
+        <Box sx={{ 
+          position: 'fixed', 
+          top: 20, 
+          right: 20, 
+          zIndex: 1000,
+          display: 'flex',
+          gap: 1
+        }}>
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<Logout />}
+            onClick={async () => {
+              try {
+                await AdminAuthService.logout();
+                // Update local state and refresh the page
+                setIsAdminLoggedIn(false);
+                window.location.reload();
+              } catch (error) {
+                console.error('Logout error:', error);
+              }
+            }}
+            sx={{
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 1)',
+              }
+            }}
+          >
+            Deconectare
+          </Button>
+        </Box>
+      )}
+      
       <Container maxWidth="xl" sx={{ py: 4 }}>
                 {/* Hero Section */}
         <Box sx={{ textAlign: 'center', mb: 6 }}>
@@ -305,9 +407,11 @@ const ViaTransilvanicaPage = () => {
           </Typography>
 
           {/* Mission Statement */}
+        
+
           <Box sx={{ mb: 4, maxWidth: '60em', mx: 'auto' }}>
             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.2rem', lineHeight: 1.6 }}>
-              Pe 1 septembrie 2025 {isClient && timeUntilStart > 0 ? 'voi porni' : 'am pornit'} în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
+                             Salutare! Eu sunt <a href="/#despre" style={{ textDecoration: 'underline' }}>Edi</a> și pe 1 septembrie 2025 {isClient && timeUntilStart > 0 ? 'voi porni' : 'am pornit'} în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
               <a href="https://sanctuarnima.ro" target='__blank'><strong style={{ color: 'var(--orange)', textDecoration: 'underline' }}>Sanctuarul Nima</strong></a> - primul sanctuar din România 
               destinat animalelor de fermă salvate de la abator sau exploatare. Aici își trăiesc viețile acum în pace și armonie peste <a href="https://sanctuarnima.ro/rezidenti/" target='__blank' style={{ color: 'var(--blue)', fontWeight: '900', textDecoration: 'underline' }}>140 de animale</a> din 12 specii diferite.
             </Typography>
@@ -449,10 +553,10 @@ Iar eu alerg pentru fiecare mesaj în parte.
               borderRadius: 2,
               order: { xs: 2, md: 2 }
             }}>
-              <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
+              <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)', fontWeight: 'bold' }}>
                 Cum poți susține cauza?
               </Typography>
-              <Typography variant="body1" sx={{ mb: 2 }}>
+              <Typography variant="body1" sx={{ mb: 2, fontWeight: '600' }}>
                 Donează <strong style={{ color: 'var(--orange)' }}>2 euro / lună</strong> pentru hrana animalelor salvate
               </Typography>
               <Button 
@@ -487,6 +591,11 @@ Iar eu alerg pentru fiecare mesaj în parte.
               </Button>
               <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary', fontSize: '0.8rem', fontStyle: 'italic', opacity: 0.6 }}>
                 * Pentru dezabonare, trimite "NIMA STOP" la 8845
+              </Typography>
+
+              <Typography variant="body2" sx={{ fontWeight: '400', mt: 2, color: 'var(--blue)', fontSize: '1rem', }}>
+              Vrei să susții sanctuarul și mai mult? {' '}
+                <a href="https://sanctuarnima.ro/implica-te/" target='__blank' style={{ textDecoration: 'underline', fontWeight: '600' }}>Implică-te!</a>
               </Typography>
             </Box>
           </Box>
