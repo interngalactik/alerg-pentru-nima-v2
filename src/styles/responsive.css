@@ -140,6 +140,14 @@ body {
     font-size: 1rem;
     line-height: 1.5;
   }
+
+  .heading {
+    font-size: 3em!important;
+  }
+
+  .sponsors_text-wrapper {
+    width: 20em;
+  }
 }
 
 /* Hide mobile wrapper on desktop */
@@ -238,7 +246,7 @@ body {
 
 @media screen and (max-width: 387px) {
   .logo_placeholder {
-    width: 11em!important;
+    width: 6em!important;
    }
 
    .calendar_heading {
@@ -433,7 +441,7 @@ html, body {
   position: relative;
   max-width: 485px;
   max-height: 555px;
-  width: 30em;
+  width: 23em;
   height: 35em;
 }
 

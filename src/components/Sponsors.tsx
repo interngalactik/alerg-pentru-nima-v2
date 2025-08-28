@@ -29,7 +29,9 @@ export default function Sponsors() {
           </p>
         </div>
         <div className="_15-spacer"></div>
-        <a href="mailto:eduard@nistru.ro" onClick={() => trackEvent.externalLinkClick('mailto:eduard@nistru.ro')} className="email">eduard@nistru.ro</a>
+        <a href="mailto:eduard@nistru.ro" onClick={() => trackEvent.externalLinkClick('mailto:eduard@nistru.ro')} className="email">
+          eduard@nistru.ro
+        </a>
         <div className="_30-spacer"></div>
         
         <Image 
