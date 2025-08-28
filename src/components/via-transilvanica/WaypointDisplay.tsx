@@ -215,7 +215,7 @@ export default function WaypointDisplay({
             startIcon={<LocationIcon />}
             onClick={openInGoogleMaps}
           >
-            Deschide în Google Maps
+            Maps
           </Button>
 
           <Button

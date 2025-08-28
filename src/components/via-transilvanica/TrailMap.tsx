@@ -1341,7 +1341,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                      }}
                      sx={{ fontSize: '0.75rem' }}
                    >
-                     🗺️ Deschide în Google Maps
+                     🗺️ Maps
                    </Button>
                    {isAdmin && (
                      <>
@@ -1473,7 +1473,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                      }}
                      sx={{ fontSize: '0.75rem' }}
                    >
-                     🗺️ Deschide în Google Maps
+                     🗺️ Maps
                    </Button>
                    {isAdmin && (
                      <>
@@ -1727,7 +1727,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                     }}
                     sx={{ fontSize: '0.75rem' }}
                   >
-                    🗺️ Deschide în Google Maps
+                    🗺️ Maps
                   </Button>
                   
                   {isAdmin && (

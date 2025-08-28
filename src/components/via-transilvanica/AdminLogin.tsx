@@ -35,7 +35,9 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setError('');
     
     try {
+      console.log('Attempting admin login...');
       const success = await AdminAuthService.login(password);
+      console.log('Login result:', success);
       
       if (success) {
         setIsLoggedIn(true);
@@ -44,7 +46,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         setError('Parola incorectă');
       }
     } catch (error) {
-      setError('Eroare la autentificare');
+      console.error('Admin login error:', error);
+      setError(`Eroare la autentificare: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }

@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 // Simple token secret from environment variable
-const TOKEN_SECRET = process.env.TOKEN_SECRET || 'your-secret-key-change-this';
+const TOKEN_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
 // Simple token generation (in production, use a proper JWT library)
 function generateToken(payload: any): string {
@@ -18,6 +18,15 @@ function generateToken(payload: any): string {
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
+
+    // Log the attempt (without exposing the actual password)
+    console.log('Admin login attempt:', {
+      hasPassword: !!password,
+      passwordLength: password?.length,
+      adminPasswordSet: !!process.env.ADMIN_PASSWORD,
+      jwtSecretSet: !!process.env.JWT_SECRET,
+      nodeEnv: process.env.NODE_ENV
+    });
 
     // Validate password
     if (password === ADMIN_PASSWORD) {
@@ -33,15 +42,36 @@ export async function POST(request: NextRequest) {
         message: 'Login successful' 
       });
 
-      response.cookies.set('admin_token', token, {
+      const cookieOptions = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: true, // Always secure for HTTPS
+        sameSite: 'lax' as const, // More permissive
         maxAge: 24 * 60 * 60, // 24 hours
         path: '/'
+        // Remove domain restriction
+      };
+
+      console.log('Setting admin token cookie with options:', {
+        tokenLength: token.length,
+        tokenStart: token.substring(0, 20) + '...',
+        ...cookieOptions
       });
 
-      return response;
+      // Return the token in the response body for localStorage
+      const responseData = { 
+        success: true, 
+        message: 'Login successful',
+        token: token
+      };
+      
+      console.log('Login API: Returning response with token:', {
+        success: responseData.success,
+        message: responseData.message,
+        hasToken: !!responseData.token,
+        tokenLength: responseData.token?.length
+      });
+      
+      return NextResponse.json(responseData);
     } else {
       return NextResponse.json(
         { success: false, message: 'Invalid password' },

@@ -12,7 +12,7 @@ export default function Runner() {
   })
 
   return (
-    <section className="section blue" ref={sectionRef}>
+    <section id="despre" className="section blue" ref={sectionRef}>
       <div className="container centered">
         <div className="_60_spacer"></div>
         <div className="edi_image-wrapper">
