@@ -425,7 +425,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
 
           {/* Countdown */}
           {isClient && timeUntilStart > 0 && (
-            <Box sx={{ mb: 2, p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 152, 0, 0.1)', borderRadius: 2 }}>
+            <Box sx={{ mb: 4, p: 2, maxWidth: 1200, marginLeft: 'auto', marginRight: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: 'rgba(255, 152, 0, 0.1)', borderRadius: 2 }}>
               <Typography variant="body1" sx={{ mb: 1, color: 'var(--blue)', fontWeight: 'bold' }}>
                 Au mai rămas
               </Typography>
@@ -486,7 +486,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
               {/* KM Progress */}
               <Box sx={{ mb: 3 }}>
                 <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontSize: '0.9rem', textAlign: 'left' }}>
-                  KM*
+                  Am alergat*
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                   <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
@@ -517,7 +517,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
               {/* SMS Progress */}
               <Box>
                 <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontSize: '0.9rem', textAlign: 'left' }}>
-                  SMS**
+                  Susținători**
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                   <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
@@ -540,7 +540,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
                   }} 
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontStyle: 'italic', display: 'flex' }}>
-                  ** donațiile active din cele necesare hranei animăluțelor în fiecare lună
+                  ** donatori lunari activi pentru hrana animăluțelor din cei 7000 necesari
                 </Typography>
               </Box>
             </Box>
