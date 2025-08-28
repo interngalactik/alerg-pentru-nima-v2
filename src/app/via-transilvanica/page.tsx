@@ -603,7 +603,10 @@ Iar eu alerg pentru fiecare mesaj în parte.
 
 
         {/* Map Section */}
-        <Paper sx={{ p: 3, mb: 4 }}>
+        <Paper sx={{ 
+          py: { xs: 1, sm: 2, md: 3 }, // Only top/bottom padding
+          mb: 4 
+        }}>
           <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
             Traseul Via Transilvanica
           </Typography>

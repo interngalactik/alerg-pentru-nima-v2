@@ -57,8 +57,45 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [isRunActive, setIsRunActive] = useState(false);
   const [runTimeline, setRunTimeline] = useState<{ startDate: string; finishDate: string; startTime: string; finishTime: string } | null>(null);
   const [waypointCompletions, setWaypointCompletions] = useState<Record<string, { completedAt: number; completedBy: string }>>({});
+  const [showProgressOverlay, setShowProgressOverlay] = useState(true); // Toggle for progress overlay
+  const [isPopupOpen, setIsPopupOpen] = useState(false); // Track popup state
   const mapRef = useRef<L.Map | null>(null);
   const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
+
+  // Add popup event listeners when map is ready (phone only)
+  useEffect(() => {
+    if (mapRef.current) {
+      const map = mapRef.current;
+      
+      const handlePopupOpen = (e: any) => {
+        setIsPopupOpen(true);
+        // Only auto-hide overlay on phones (≤600px)
+        if (window.innerWidth <= 600) {
+          setShowProgressOverlay(false);
+        }
+        
+        // Popup opened - handle overlay visibility (phone only)
+        // Let Leaflet handle popup positioning naturally
+      };
+      
+      const handlePopupClose = () => {
+        setIsPopupOpen(false);
+        // Only auto-show overlay on phones (≤600px)
+        if (window.innerWidth <= 600) {
+          setShowProgressOverlay(true);
+        }
+      };
+      
+      // Listen for popup open/close events
+      map.on('popupopen', handlePopupOpen);
+      map.on('popupclose', handlePopupClose);
+      
+      return () => {
+        map.off('popupopen', handlePopupOpen);
+        map.off('popupclose', handlePopupClose);
+      };
+    }
+  }, [mapRef.current]);
 
   // Get all route points from GPX tracks
   const allRoutePoints = useMemo(() => {
@@ -882,7 +919,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   // Don't render map until client-side and Leaflet is loaded
   if (!isClient || !leafletLoaded) {
     return (
-      <Box sx={{ width: '100%', height: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Box sx={{ width: '100%', height: '80vh', minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Typography>Loading map...</Typography>
       </Box>
     );
@@ -890,8 +927,44 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
   return (
     <Box sx={{ width: '100%', position: 'relative' }}>
-      {/* Map controls */}
-      <Box sx={{ position: 'absolute', top: 10, right: 10, zIndex: 1000, display: 'flex', gap: 1 }}>
+      {/* Custom CSS for mobile popup optimization */}
+      <style jsx global>{`
+        .leaflet-popup-content-wrapper {
+          border-radius: 8px !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+        }
+        
+        .leaflet-popup-content {
+          margin: 8px !important;
+          font-size: 14px !important;
+        }
+        
+
+        
+        @media (max-width: 768px) {
+          .leaflet-popup-content {
+            margin: 6px !important;
+            font-size: 12px !important;
+          }
+          
+          .leaflet-popup-content-wrapper {
+            max-width: 90vw !important;
+            min-width: 200px !important;
+          }
+        }
+      `}</style>
+              {/* Map controls - Auto-hide on mobile when popup is open */}
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 10, 
+          right: 10, 
+          zIndex: 1000, 
+          display: 'flex', 
+          gap: 1,
+          opacity: (window.innerWidth <= 600 && isPopupOpen) ? 0 : 1,
+          visibility: (window.innerWidth <= 600 && isPopupOpen) ? 'hidden' : 'visible',
+          transition: 'opacity 0.2s ease-in-out, visibility 0.2s ease-in-out'
+        }}>
         {/* <Button
           variant="contained"
           onClick={centerMap}
@@ -905,7 +978,14 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             variant="contained"
             onClick={centerOnCurrentLocation}
             startIcon={<LocationOn />}
-            sx={{ backgroundColor: 'var(--blue)', color: 'white', boxShadow: 2 }}
+            size="small"
+            sx={{ 
+              backgroundColor: 'var(--blue)', 
+              color: 'white', 
+              boxShadow: 2,
+              fontSize: { xs: '0.7rem', sm: '0.875rem' },
+              padding: { xs: '4px 8px', sm: '6px 12px' }
+            }}
           >
             Locația curentă
           </Button>
@@ -940,11 +1020,37 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           <Button
             variant="contained"
             onClick={fitBounds}
-            sx={{ backgroundColor: 'white', color: 'var(--blue)', boxShadow: 2 }}
+            size="small"
+            sx={{ 
+              backgroundColor: 'white', 
+              color: 'var(--blue)', 
+              boxShadow: 2,
+              fontSize: { xs: '0.7rem', sm: '0.875rem' },
+              padding: { xs: '4px 8px', sm: '6px 12px' }
+            }}
           >
             Ajustează harta
           </Button>
         )}
+        
+        {/* Toggle Progress Overlay Button */}
+        <Button
+          variant="outlined"
+          onClick={() => setShowProgressOverlay(!showProgressOverlay)}
+          size="small"
+          disabled={window.innerWidth <= 600 && isPopupOpen} // Only disable on phones when popup is open
+          sx={{ 
+            backgroundColor: (window.innerWidth <= 600 && isPopupOpen) ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.9)',
+            color: (window.innerWidth <= 600 && isPopupOpen) ? 'text.disabled' : 'var(--blue)', 
+            borderColor: (window.innerWidth <= 600 && isPopupOpen) ? 'text.disabled' : 'var(--blue)',
+            fontSize: { xs: '0.7rem', sm: '0.875rem' },
+            padding: { xs: '4px 8px', sm: '6px 12px' },
+            minWidth: 'auto'
+          }}
+          title={window.innerWidth <= 600 && isPopupOpen ? 'Overlay hidden (popup open)' : showProgressOverlay ? 'Hide overlay' : 'Show overlay'}
+        >
+          {(window.innerWidth <= 600 && isPopupOpen) ? '👁️‍🗨️' : (showProgressOverlay ? '👁️' : '👁️‍🗨️')}
+        </Button>
 
       </Box>
 
@@ -956,7 +1062,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     <MapContainer
         center={currentLocationPoint ? [currentLocationPoint.lat, currentLocationPoint.lng] : [currentLocation.lat, currentLocation.lng]}
       zoom={8}
-        style={{ height: '500px', width: '100%' }}
+        style={{ 
+          height: '80vh', // 80% of viewport height
+          width: '100%',
+          minHeight: '400px', // Minimum height for very small screens
+          maxHeight: '800px'  // Maximum height for large screens
+        }}
       ref={mapRef}
     >
       <TileLayer
@@ -989,6 +1100,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       ) : null}
 
         {/* Progress overlay */}
+        {showProgressOverlay && (window.innerWidth > 600 || !isPopupOpen) && (
         <Box
           sx={{
             position: 'absolute',
@@ -1079,6 +1191,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             </Typography>
           )} */}
         </Box>
+        )}
 
         {/* GPX Track - Completed portion (orange) */}
         {trackProgress.completedPoints.length > 0 && (
@@ -1300,7 +1413,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             })}
           >
             <Popup>
-            <Box sx={{ minWidth: 200 }}>
+            <Box sx={{ 
+              minWidth: { xs: 150, sm: 180, md: 200 }, // Responsive width
+              maxWidth: { xs: '90vw', sm: '300px', md: '400px' }, // Prevent overflow on mobile
+              fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } // Responsive font size
+            }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
               Putna
               </Typography>
@@ -1339,7 +1456,10 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                        const url = `https://www.google.com/maps?q=${startPoint[0].toFixed(4)},${startPoint[1].toFixed(4)}`;
                        window.open(url, '_blank');
                      }}
-                     sx={{ fontSize: '0.75rem' }}
+                     sx={{ 
+                       fontSize: { xs: '0.7rem', sm: '0.75rem', md: '0.75rem' },
+                       padding: { xs: '4px 8px', sm: '6px 12px', md: '6px 12px' }
+                     }}
                    >
                      🗺️ Maps
                    </Button>
@@ -1390,7 +1510,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             })}
           >
             <Popup>
-            <Box sx={{ minWidth: 200 }}>
+            <Box sx={{ 
+              minWidth: { xs: 150, sm: 180, md: 200 }, // Responsive width
+              maxWidth: { xs: '90vw', sm: '300px', md: '400px' }, // Prevent overflow on mobile
+              fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } // Responsive font size
+            }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
               Drobeta-Turnu Severin
               </Typography>
@@ -1566,7 +1690,11 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
             })}
         >
           <Popup>
-              <Box sx={{ minWidth: 200 }}>
+              <Box sx={{ 
+                minWidth: { xs: 150, sm: 180, md: 200 }, // Responsive width
+                maxWidth: { xs: '90vw', sm: '300px', md: '400px' }, // Prevent overflow on mobile
+                fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } // Responsive font size
+              }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
                   {waypoint.name}
             </Typography>
