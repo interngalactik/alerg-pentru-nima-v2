@@ -264,12 +264,49 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     }
   }, []);
 
-// Performance optimization: Pre-calculate and cache track data - DISABLED FOR PERFORMANCE
+// Performance optimization: Pre-calculate and cache track data - SMART CACHING
 const cachedTrackData = useMemo(() => {
-  // TEMPORARILY DISABLED - This was processing 38,000+ GPX points on every render
-  // Return null to prevent expensive calculations
-  return null;
-}, []);
+  if (!gpxData || !gpxData.tracks || gpxData.tracks.length === 0) return null;
+  
+  // Use a stable cache key that won't change unless GPX data actually changes
+  const cacheKey = `trackData_${gpxData.tracks[0].points.length}`;
+  
+  // Check if we already have this data cached
+  if (calculationCache.current.has(cacheKey)) {
+    return calculationCache.current.get(cacheKey);
+  }
+  
+  // Only calculate if we don't have it cached
+  const track = gpxData.tracks[0];
+  const points = track.points;
+  
+  if (points.length < 2) return null;
+  
+  // Calculate total track distance once and cache it FOREVER
+  let totalDistance = 0;
+  const segmentDistances: number[] = [];
+  const cumulativeDistances: number[] = [0];
+  
+  for (let i = 1; i < points.length; i++) {
+    const segmentDistance = calculateDistance(points[i - 1], points[i]);
+    totalDistance += segmentDistance;
+    segmentDistances.push(segmentDistance);
+    cumulativeDistances.push(totalDistance);
+  }
+  
+  const trackData = {
+    totalDistance: Math.round(totalDistance * 100) / 100,
+    segmentDistances,
+    cumulativeDistances,
+    pointCount: points.length
+  };
+  
+  // Cache this data permanently - it never needs to be recalculated
+  calculationCache.current.set(cacheKey, trackData);
+  console.log('✅ Track data calculated and cached permanently:', trackData.totalDistance, 'km');
+  
+  return trackData;
+}, [gpxData?.tracks?.[0]?.points?.length]); // Only recalculate if point count changes
 
   // Add popup event listeners when map is ready (phone only)
   useEffect(() => {
@@ -323,10 +360,10 @@ const cachedTrackData = useMemo(() => {
       return precalculatedData.trackDistances.totalDistance;
     }
     
-    // Cached track data temporarily disabled for performance
-    // if (cachedTrackData && points.length === cachedTrackData.pointCount) {
-    //   return cachedTrackData.totalDistance;
-    // }
+    // Use cached track data if available and points match the main track
+    if (cachedTrackData && points.length === cachedTrackData.pointCount) {
+      return cachedTrackData.totalDistance;
+    }
     
     // Fallback to calculation if cache is not available
     let totalDistance = 0;
@@ -523,17 +560,50 @@ const cachedTrackData = useMemo(() => {
     return trackDistance;
   };
 
-  // Sort waypoints by their position along the GPX track - Performance optimized
+  // Sort waypoints by their position along the GPX track - SMART CACHING
   const sortedWaypoints = useMemo(() => {
     // If we have server progress with sorted waypoints, use it (FAST)
     if (serverProgress && serverProgress.sortedWaypoints) {
       return serverProgress.sortedWaypoints;
     }
     
-    // Simple fallback - just return waypoints as-is to avoid heavy calculations
-    // The server should handle all sorting in normal operation
+    // If we have cached track data, we can do efficient sorting
+    if (cachedTrackData && waypoints.length > 0 && gpxData?.tracks?.[0]?.points) {
+      const track = gpxData.tracks[0];
+      const points = track.points;
+      
+      // Calculate the closest track point index for each waypoint (ONCE)
+      const waypointsWithTrackIndex = waypoints.map(waypoint => {
+        let closestIndex = 0;
+        let minDistance = Infinity;
+
+        // Use cached segment distances if available for faster calculation
+        for (let i = 0; i < points.length; i++) {
+          const distance = calculateDistance(
+            [waypoint.coordinates.lat, waypoint.coordinates.lng],
+            points[i]
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = i;
+          }
+        }
+
+        return {
+          ...waypoint,
+          trackIndex: closestIndex
+        };
+      });
+
+      // Sort by track index (position along the route)
+      return waypointsWithTrackIndex
+        .sort((a, b) => a.trackIndex - b.trackIndex)
+        .map(({ trackIndex, ...waypoint }) => waypoint); // Remove trackIndex from final result
+    }
+    
+    // Fallback - return waypoints as-is if no track data available
     return waypoints;
-  }, [serverProgress, waypoints]);
+  }, [serverProgress, waypoints, cachedTrackData, gpxData?.tracks?.[0]?.points]);
 
   // Calculate distance from last waypoint or start - Performance optimized
   const calculateDistanceFromLastWaypoint = useCallback((waypointIndex: number) => {
@@ -853,8 +923,8 @@ const cachedTrackData = useMemo(() => {
     let totalDistance: number;
     if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalDistance) {
       totalDistance = precalculatedData.trackDistances.totalDistance;
-    // } else if (cachedTrackData) {
-    //   totalDistance = cachedTrackData.totalDistance;
+    } else if (cachedTrackData) {
+      totalDistance = cachedTrackData.totalDistance;
     } else {
       totalDistance = calculateTotalTrackDistance(points);
     }

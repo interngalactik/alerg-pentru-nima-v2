@@ -99,16 +99,31 @@ export default function WaypointForm({
 
   // Performance optimization: Memoized default start date/time function
   const setDefaultStartDateTime = useCallback(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowString = tomorrow.toISOString().split('T')[0];
-    
-    setFormData(prev => ({
-      ...prev,
-      startDate: tomorrowString,
-      startTime: '07:00'
-    }));
-  }, []);
+    // If we have a selected date, use the next day from that date
+    if (formData.date) {
+      const selectedDate = new Date(formData.date);
+      const nextDay = new Date(selectedDate);
+      nextDay.setDate(selectedDate.getDate() + 1);
+      const nextDayString = nextDay.toISOString().split('T')[0];
+      
+      setFormData(prev => ({
+        ...prev,
+        startDate: nextDayString,
+        startTime: '07:00'
+      }));
+    } else {
+      // Fallback to tomorrow if no date is selected
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowString = tomorrow.toISOString().split('T')[0];
+      
+      setFormData(prev => ({
+        ...prev,
+        startDate: tomorrowString,
+        startTime: '07:00'
+      }));
+    }
+  }, [formData.date]);
 
   // Auto-set default values when waypoint type changes
   useEffect(() => {
