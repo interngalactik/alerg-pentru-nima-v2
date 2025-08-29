@@ -13,6 +13,7 @@ const precalculateWaypointDistances = httpsCallable(functions, 'precalculateWayp
 const getPrecalculatedData = httpsCallable(functions, 'getPrecalculatedData');
 const updateProgress = httpsCallable(functions, 'updateProgress');
 const recalculateAll = httpsCallable(functions, 'recalculateAll');
+const calculatePopupData = httpsCallable(functions, 'calculatePopupData');
 
 export interface PrecalculatedTrackData {
   totalDistance: number;
@@ -40,6 +41,14 @@ export interface WaypointDistanceData {
   calculatedAt: number;
 }
 
+export interface PopupData {
+  distanceFromCurrent: number;
+  elevationGainFromCurrent: number;
+  currentLocationIndex: number;
+  waypointIndex: number;
+  calculatedAt: number;
+}
+
 export interface ProgressData {
   currentLocationIndex: number;
   distanceToNextWaypoint: number;
@@ -51,6 +60,7 @@ export interface PrecalculatedData {
   trackDistances?: PrecalculatedTrackData;
   waypointPositions?: Record<string, PrecalculatedWaypointData>;
   waypointDistances?: Record<string, WaypointDistanceData>;
+  popupData?: Record<string, PopupData>;
 }
 
 export class PerformanceService {
@@ -102,23 +112,16 @@ export class PerformanceService {
     }
   }
 
-  // Pre-calculate waypoint positions and distances on server
-  async precalculateWaypointDistances(gpxData: any, waypoints: any[]): Promise<{
-    waypointPositions: Record<string, PrecalculatedWaypointData>;
-    waypointDistances: Record<string, WaypointDistanceData>;
-  }> {
+  // Pre-calculate waypoint distances on server
+  async precalculateWaypointDistances(gpxData: any, waypoints: any[]): Promise<any> {
     try {
       const result = await precalculateWaypointDistances({ gpxData, waypoints });
       const data = result.data as any;
       
       if (data.success) {
-        // Cache the results locally
-        this.cache.set('waypointPositions', {
-          data: data.data.waypointPositions,
-          timestamp: Date.now()
-        });
+        // Cache the result locally
         this.cache.set('waypointDistances', {
-          data: data.data.waypointDistances,
+          data: data.data,
           timestamp: Date.now()
         });
         return data.data;
@@ -127,6 +130,28 @@ export class PerformanceService {
       }
     } catch (error) {
       console.error('Error pre-calculating waypoint distances:', error);
+      throw error;
+    }
+  }
+
+  // Calculate popup data for waypoints (current location to waypoint distances)
+  async calculatePopupData(gpxData: any, waypoints: any[], currentLocation: any): Promise<any> {
+    try {
+      const result = await calculatePopupData({ gpxData, waypoints, currentLocation });
+      const data = result.data as any;
+      
+      if (data.success) {
+        // Cache the result locally
+        this.cache.set('popupData', {
+          data: data.data,
+          timestamp: Date.now()
+        });
+        return data.data;
+      } else {
+        throw new Error(data.error || 'Failed to calculate popup data');
+      }
+    } catch (error) {
+      console.error('Error calculating popup data:', error);
       throw error;
     }
   }

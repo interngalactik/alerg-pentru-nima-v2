@@ -73,6 +73,16 @@ function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number
   return null;
 }
 
+// Zoom Handler Component for GPX optimization
+function ZoomHandler({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  useMapEvents({
+    zoomend: (e) => {
+      onZoomChange(e.target.getZoom());
+    },
+  });
+  return null;
+}
+
 interface TrailMapProps {
   currentLocation: { lat: number; lng: number };
   progress: number;
@@ -106,6 +116,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [waypointCompletions, setWaypointCompletions] = useState<Record<string, { completedAt: number; completedBy: string }>>({});
   const [showProgressOverlay, setShowProgressOverlay] = useState(true); // Toggle for progress overlay
   const [isPopupOpen, setIsPopupOpen] = useState(false); // Track popup state
+  const [currentZoom, setCurrentZoom] = useState<number>(8); // Track current zoom level for GPX optimization
   const mapRef = useRef<L.Map | null>(null);
   const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
 
@@ -727,6 +738,32 @@ const cachedTrackData = useMemo(() => {
     // During active run, check if physically passed
     return hasPassedWaypoint(waypoint.coordinates);
   };
+
+  // Simple GPX point decimation for performance - reduces 38,000+ points to manageable levels
+  const getDecimatedPoints = useCallback((points: [number, number][], zoom: number): [number, number][] => {
+    if (points.length <= 1000) return points; // No need to decimate small tracks
+    
+    // Simple decimation based on zoom level
+    let step = 1;
+    if (zoom <= 8) step = 100;     // Very low zoom: show every 100th point
+    else if (zoom <= 10) step = 50; // Low zoom: show every 50th point
+    else if (zoom <= 12) step = 20; // Medium zoom: show every 20th point
+    else if (zoom <= 14) step = 10; // High zoom: show every 10th point
+    else if (zoom <= 16) step = 5;  // Very high zoom: show every 5th point
+    // At zoom > 16, show all points
+    
+    const decimated: [number, number][] = [];
+    for (let i = 0; i < points.length; i += step) {
+      decimated.push(points[i]);
+    }
+    
+    // Always include the last point
+    if (points.length > 0 && decimated[decimated.length - 1] !== points[points.length - 1]) {
+      decimated.push(points[points.length - 1]);
+    }
+    
+    return decimated;
+  }, []);
 
 
 
@@ -1389,9 +1426,26 @@ const cachedTrackData = useMemo(() => {
 
       </Box>
 
-
-
-
+      {/* Performance indicator */}
+      {gpxData && gpxData.tracks.length > 0 && (
+        <Box sx={{ 
+          position: 'absolute', 
+          top: 10, 
+          left: 10, 
+          zIndex: 1000,
+          backgroundColor: 'rgba(255,255,255,0.9)',
+          padding: 1,
+          borderRadius: 1,
+          fontSize: '0.75rem',
+          color: 'text.secondary'
+        }}>
+          GPX: {(() => {
+            const totalPoints = gpxData.tracks[0].points.length;
+            const optimizedPoints = getDecimatedPoints(gpxData.tracks[0].points, currentZoom).length;
+            return `${optimizedPoints}/${totalPoints} (${Math.round((optimizedPoints/totalPoints)*100)}%)`;
+          })()} | Zoom: {currentZoom}
+        </Box>
+      )}
 
       {/* Map Container */}
     <MapContainer
@@ -1409,6 +1463,9 @@ const cachedTrackData = useMemo(() => {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      {/* Zoom event handler for GPX optimization */}
+      <ZoomHandler onZoomChange={setCurrentZoom} />
 
       {/* Map Click Handler for Coordinate Selection */}
       {(showWaypointForm || editingWaypoint || isCoordinateSelectionMode) ? (
@@ -1547,11 +1604,11 @@ const cachedTrackData = useMemo(() => {
         </Box>
         )}
 
-        {/* GPX Track - Completed portion (orange) */}
+        {/* GPX Track - Completed portion (blue) - Performance optimized */}
         {trackProgress.completedPoints.length > 0 && (
             <Polyline
-            key="completed-track"
-            positions={trackProgress.completedPoints}
+            key={`completed-track-${currentZoom}`}
+            positions={getDecimatedPoints(trackProgress.completedPoints, currentZoom)}
               color="var(--blue)"
             weight={4}
               opacity={0.9}
@@ -1626,11 +1683,11 @@ const cachedTrackData = useMemo(() => {
           />
         )}
 
-        {/* GPX Track - Remaining portion (orange) */}
+        {/* GPX Track - Remaining portion (orange) - Performance optimized */}
         {trackProgress.remainingPoints.length > 0 && (
           <Polyline
-            key="remaining-track"
-            positions={trackProgress.remainingPoints}
+            key={`remaining-track-${currentZoom}`}
+            positions={getDecimatedPoints(trackProgress.remainingPoints, currentZoom)}
             color="#ff6b35"
             weight={isAdmin ? 4 : 3}
             opacity={0.8}
@@ -1705,11 +1762,11 @@ const cachedTrackData = useMemo(() => {
           />
         )}
 
-        {/* Fallback: Show full track if no progress calculation */}
+        {/* Fallback: Show full track if no progress calculation - Performance optimized */}
         {trackProgress.completedPoints.length === 0 && trackProgress.remainingPoints.length === 0 && uploadedTracks.map((track, trackIndex) => (
           <Polyline
-            key={`track-${trackIndex}`}
-            positions={track.points}
+            key={`fallback-track-${trackIndex}-${currentZoom}`}
+            positions={getDecimatedPoints(track.points, currentZoom)}
             color="#ff6b35"
             weight={isAdmin ? 4 : 3}
             opacity={0.8}
