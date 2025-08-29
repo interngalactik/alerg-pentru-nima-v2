@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,6 +17,19 @@ import {
   Alert
 } from '@mui/material';
 import { WaypointFormData } from '../../types/waypoint';
+
+// Performance optimization: Debounce function
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 interface WaypointFormProps {
   isOpen: boolean;
@@ -52,27 +65,50 @@ export default function WaypointForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Performance optimization: Memoized default values
+  const defaultFormData = useMemo(() => ({
+    name: '',
+    type: 'intermediary' as const,
+    details: '',
+    coordinates: coordinates,
+    date: '',
+    eta: '',
+    startDate: '',
+    startTime: ''
+  }), [coordinates]);
+
+  // Performance optimization: Debounced form submission
+  const debouncedSubmit = useCallback(
+    debounce((data: WaypointFormData) => {
+      onSubmit(data);
+    }, 100),
+    [onSubmit]
+  );
+
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
       setIsInitialized(true);
     } else if (isOpen) {
       // Always initialize form when opening for a new waypoint
-      const newFormData: WaypointFormData = {
-        name: '',
-        type: 'intermediary',
-        details: '',
-        coordinates: coordinates,
-        date: '',
-        eta: '',
-        startDate: '',
-        startTime: ''
-      };
-      setFormData(newFormData);
+      setFormData(defaultFormData);
       setIsInitialized(true);
     }
     setErrors({});
-  }, [initialData, isOpen, coordinates]);
+  }, [initialData, isOpen, defaultFormData]);
+
+  // Performance optimization: Memoized default start date/time function
+  const setDefaultStartDateTime = useCallback(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowString = tomorrow.toISOString().split('T')[0];
+    
+    setFormData(prev => ({
+      ...prev,
+      startDate: tomorrowString,
+      startTime: '07:00'
+    }));
+  }, []);
 
   // Auto-set default values when waypoint type changes
   useEffect(() => {
@@ -95,22 +131,37 @@ export default function WaypointForm({
         setDefaultStartDateTime();
       }
     }
-  }, [formData.type, formData.date]);
+  }, [formData.type, formData.date, formData.startDate, setDefaultStartDateTime]);
 
-  const validateForm = (): boolean => {
+  // Performance optimization: Memoized validation function
+  const validateForm = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
       newErrors.name = 'Numele este obligatoriu';
     }
 
-    // Details are now optional, so no validation needed
+    if (!formData.coordinates || 
+        Math.abs(formData.coordinates.lat) < 0.001 || 
+        Math.abs(formData.coordinates.lng) < 0.001) {
+      newErrors.coordinates = 'Coordonatele sunt obligatorii';
+    }
+
+    if (formData.type === 'finish-start') {
+      if (!formData.date) {
+        newErrors.date = 'Data de sosire este obligatorie pentru punctele de sosire/pornire';
+      }
+      if (!formData.startDate) {
+        newErrors.startDate = 'Data de pornire este obligatorie pentru punctele de sosire/pornire';
+      }
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Performance optimization: Memoized form submission handler
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -118,62 +169,142 @@ export default function WaypointForm({
     }
 
     setIsSubmitting(true);
+    
     try {
-      await onSubmit(formData);
-      handleClose();
+      // Use debounced submit for better performance
+      debouncedSubmit(formData);
+      onClose();
     } catch (error) {
       console.error('Error submitting waypoint:', error);
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [formData, validateForm, debouncedSubmit, onClose]);
 
-  const handleClose = () => {
-    setIsInitialized(false);
-    setErrors({});
-    onClose();
-  };
-
-  const handleInputChange = (field: keyof WaypointFormData, value: string | number) => {
+  // Performance optimization: Memoized form change handler
+  const handleFormChange = useCallback((field: keyof WaypointFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
     
-    // Clear error when user starts typing
+    // Clear error for the field being changed
     if (errors[field]) {
       setErrors(prev => ({
         ...prev,
         [field]: ''
       }));
     }
-    
-    // Auto-update start date when arrival date changes for finish/start waypoints
-    if (field === 'date' && formData.type === 'finish-start' && value) {
-      const arrivalDate = new Date(value as string);
-      const nextDay = new Date(arrivalDate);
-      nextDay.setDate(arrivalDate.getDate() + 1);
-      
-      const nextDayString = nextDay.toISOString().split('T')[0];
-      setFormData(prev => ({
-        ...prev,
-        startDate: nextDayString
-      }));
-    }
-  };
+  }, [errors]);
 
-  const handleCoordinateChange = (field: 'lat' | 'lng', value: string) => {
-    const numValue = parseFloat(value);
-    if (!isNaN(numValue)) {
-      setFormData(prev => ({
+  // Performance optimization: Memoized coordinate update handler
+  const handleCoordinateUpdate = useCallback((lat: number, lng: number) => {
+    setFormData(prev => ({
+      ...prev,
+      coordinates: { lat, lng }
+    }));
+    
+    if (onCoordinateSelect) {
+      onCoordinateSelect({ lat, lng });
+    }
+    
+    // Clear coordinate error if it exists
+    if (errors.coordinates) {
+      setErrors(prev => ({
         ...prev,
-        coordinates: {
-          ...prev.coordinates,
-          [field]: numValue
-        }
+        coordinates: ''
       }));
     }
-  };
+  }, [onCoordinateSelect, errors.coordinates]);
+
+  // Performance optimization: Memoized form fields to prevent unnecessary re-renders
+  const formFields = useMemo(() => ({
+    name: (
+      <TextField
+        fullWidth
+        label="Nume punct"
+        value={formData.name}
+        onChange={(e) => handleFormChange('name', e.target.value)}
+        error={!!errors.name}
+        helperText={errors.name}
+        margin="normal"
+        size="small"
+      />
+    ),
+    type: (
+      <FormControl fullWidth margin="normal" size="small">
+        <InputLabel>Tip punct</InputLabel>
+        <Select
+          value={formData.type}
+          onChange={(e) => handleFormChange('type', e.target.value)}
+          label="Tip punct"
+        >
+          <MenuItem value="intermediary">Punct Intermediar</MenuItem>
+          <MenuItem value="finish-start">Sosire/Pornire Etapa</MenuItem>
+        </Select>
+      </FormControl>
+    ),
+    details: (
+      <TextField
+        fullWidth
+        label="Detalii (opțional)"
+        value={formData.details}
+        onChange={(e) => handleFormChange('details', e.target.value)}
+        margin="normal"
+        size="small"
+        multiline
+        rows={3}
+      />
+    ),
+    date: (
+      <TextField
+        fullWidth
+        label="Data de sosire"
+        type="date"
+        value={formData.date}
+        onChange={(e) => handleFormChange('date', e.target.value)}
+        margin="normal"
+        size="small"
+        InputLabelProps={{ shrink: true }}
+      />
+    ),
+    eta: (
+      <TextField
+        fullWidth
+        label="ETA (opțional)"
+        type="datetime-local"
+        value={formData.eta}
+        onChange={(e) => handleFormChange('eta', e.target.value)}
+        margin="normal"
+        size="small"
+        InputLabelProps={{ shrink: true }}
+      />
+    ),
+    startDate: (
+      <TextField
+        fullWidth
+        label="Data de pornire"
+        type="date"
+        value={formData.startDate}
+        onChange={(e) => handleFormChange('startDate', e.target.value)}
+        margin="normal"
+        size="small"
+        InputLabelProps={{ shrink: true }}
+      />
+    ),
+    startTime: (
+      <TextField
+        fullWidth
+        label="Ora de pornire"
+        type="time"
+        value={formData.startTime}
+        onChange={(e) => handleFormChange('startTime', e.target.value)}
+        margin="normal"
+        size="small"
+        InputLabelProps={{ shrink: true }}
+      />
+    )
+  }), [formData, errors, handleFormChange]);
 
   // Calculate ETA based on previous movement (simplified calculation)
   const calculateETA = () => {
@@ -209,32 +340,10 @@ export default function WaypointForm({
     }
   };
 
-  // Set default start date/time for finish/start waypoints
-  const setDefaultStartDateTime = () => {
-    // Use arrival date + 1 day if available, otherwise tomorrow
-    let startDate: string;
-    if (formData.date) {
-      const arrivalDate = new Date(formData.date);
-      const nextDay = new Date(arrivalDate);
-      nextDay.setDate(arrivalDate.getDate() + 1);
-      startDate = nextDay.toISOString().split('T')[0];
-    } else {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      startDate = tomorrow.toISOString().split('T')[0];
-    }
-    
-    const startTime = '07:00'; // Default start time 7:00 AM
-    
-    setFormData(prev => ({
-      ...prev,
-      startDate,
-      startTime
-    }));
-  };
+
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         {initialData ? 'Editează Waypoint' : 'Adaugă Waypoint Nou'}
       </DialogTitle>
@@ -243,40 +352,14 @@ export default function WaypointForm({
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* Name Field */}
-            <TextField
-              label="Nume"
-              value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              error={!!errors.name}
-              helperText={errors.name}
-              fullWidth
-              required
-            />
+            {formFields.name}
 
             {/* Type Field */}
-            <FormControl fullWidth required>
-              <InputLabel>Tip</InputLabel>
-              <Select
-                value={formData.type}
-                label="Tip"
-                onChange={(e) => handleInputChange('type', e.target.value)}
-              >
-                <MenuItem value="intermediary">Punct intermediar</MenuItem>
-                <MenuItem value="finish-start">Sosire/Pornire Etapa</MenuItem>
-              </Select>
-            </FormControl>
+            {formFields.type}
 
             {/* Date Field - for all waypoint types */}
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-              <TextField
-                label="Data de sosire (opțional)"
-                type="date"
-                value={formData.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                helperText="Data când vei ajunge la acest punct (data de sosire)"
-              />
+              {formFields.date}
               <Button 
                 variant="outlined" 
                 size="small"
@@ -290,15 +373,7 @@ export default function WaypointForm({
             {/* ETA Field - for intermediary waypoints */}
             {formData.type === 'intermediary' && (
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <TextField
-                  label="ETA (opțional)"
-                  type="date"
-                  value={formData.eta}
-                  onChange={(e) => handleInputChange('eta', e.target.value)}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                  helperText="Timpul estimat de sosire"
-                />
+                {formFields.eta}
                 <Button 
                   variant="outlined" 
                   size="small"
@@ -314,24 +389,8 @@ export default function WaypointForm({
             {formData.type === 'finish-start' && (
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', gap: 2, flex: 1 }}>
-                  <TextField
-                    label="Data de start"
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => handleInputChange('startDate', e.target.value)}
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    helperText="Data când vei începe următoarea etapă"
-                  />
-                  <TextField
-                    label="Ora de start"
-                    type="time"
-                    value={formData.startTime}
-                    onChange={(e) => handleInputChange('startTime', e.target.value)}
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    helperText="Ora când vei începe următoarea etapă"
-                  />
+                  {formFields.startDate}
+                  {formFields.startTime}
                 </Box>
                 <Button 
                   variant="outlined" 
@@ -345,15 +404,7 @@ export default function WaypointForm({
             )}
 
             {/* Details Field */}
-            <TextField
-              label="Detalii (opțional)"
-              value={formData.details}
-              onChange={(e) => handleInputChange('details', e.target.value)}
-              fullWidth
-              multiline
-              rows={3}
-              placeholder="Adaugă detalii despre acest punct (opțional)"
-            />
+            {formFields.details}
 
             {/* Coordinates Section */}
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
@@ -367,7 +418,7 @@ export default function WaypointForm({
                   label="Latitudine"
                   type="number"
                   value={formData.coordinates.lat}
-                  onChange={(e) => handleCoordinateChange('lat', e.target.value)}
+                  onChange={(e) => handleCoordinateUpdate(parseFloat(e.target.value), formData.coordinates.lng)}
                   fullWidth
                   inputProps={{ step: 0.000001 }}
                 />
@@ -375,7 +426,7 @@ export default function WaypointForm({
                   label="Longitudine"
                   type="number"
                   value={formData.coordinates.lng}
-                  onChange={(e) => handleCoordinateChange('lng', e.target.value)}
+                  onChange={(e) => handleCoordinateUpdate(formData.coordinates.lat, parseFloat(e.target.value))}
                   fullWidth
                   inputProps={{ step: 0.000001 }}
                 />
@@ -399,8 +450,7 @@ export default function WaypointForm({
                     variant="outlined"
                     size="small"
                     onClick={() => {
-                      handleCoordinateChange('lat', coordinates.lat.toString());
-                      handleCoordinateChange('lng', coordinates.lng.toString());
+                      handleCoordinateUpdate(coordinates.lat, coordinates.lng);
                     }}
                     sx={{ minWidth: 'auto', px: 2 }}
                   >
@@ -420,7 +470,7 @@ export default function WaypointForm({
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={handleClose} disabled={isSubmitting}>
+          <Button onClick={onClose} disabled={isSubmitting}>
             Anulează
           </Button>
           <Button 

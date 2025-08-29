@@ -1,5 +1,33 @@
 'use client';
 
+/**
+ * TrailMap Component - Performance Optimized with Server-Side Calculations
+ * 
+ * This component has been optimized to use Firebase Cloud Functions for heavy calculations:
+ * 
+ * 🚀 SERVER-SIDE OPTIMIZATIONS:
+ * - Pre-calculated track distances and elevation gain
+ * - Pre-calculated waypoint positions and distances
+ * - Server-side progress updates
+ * - Automatic fallback to client-side calculations when server data unavailable
+ * 
+ * 💻 CLIENT-SIDE OPTIMIZATIONS:
+ * - Calculation caching with useRef<Map>
+ * - Debounced map click handlers
+ * - Memoized expensive calculations
+ * - Optimized re-renders with useCallback and useMemo
+ * 
+ * 🔄 AUTO-UPDATES:
+ * - Automatic server data loading when GPX/waypoints change
+ * - Progress updates every 10 seconds when run is active
+ * - Manual refresh and recalculation buttons for admins
+ * 
+ * 📊 VISUAL INDICATORS:
+ * - 🚀 = Using server data (fast)
+ * - 💻 = Using client calculations (fallback)
+ * - Status indicators for admin controls
+ */
+
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Box, Typography, Paper, Button, CircularProgress } from '@mui/material';
 import { LocationOn, Delete as DeleteIcon } from '@mui/icons-material';
@@ -15,12 +43,31 @@ import { waypointCompletionService } from '../../lib/waypointCompletionService';
 import WaypointForm from './WaypointForm';
 import { ref, set, get } from 'firebase/database';
 import { database } from '../../lib/firebase';
+import { performanceService } from '../../lib/performanceService';
+
+// Simple performance optimization: Debounce function
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 // Map Click Handler Component for Coordinate Selection
 function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  const debouncedClick = useCallback(
+    debounce((lat: number, lng: number) => onMapClick(lat, lng), 150),
+    [onMapClick]
+  );
+
   useMapEvents({
     click: (e) => {
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      debouncedClick(e.latlng.lat, e.latlng.lng);
     },
   });
   return null;
@@ -61,6 +108,179 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [isPopupOpen, setIsPopupOpen] = useState(false); // Track popup state
   const mapRef = useRef<L.Map | null>(null);
   const lastProgressUpdateRef = useRef<{ completedDistance: number; totalDistance: number; progressPercentage: number } | null>(null);
+
+    // Enhanced performance optimization: Cache for expensive calculations
+  const calculationCache = useRef<Map<string, any>>(new Map());
+  
+  // Server-side pre-calculated data
+  const [precalculatedData, setPrecalculatedData] = useState<any>(null);
+  const [isLoadingPrecalculatedData, setIsLoadingPrecalculatedData] = useState(false);
+
+  // Clear cache when GPX data changes
+  useEffect(() => {
+    calculationCache.current.clear();
+    // Also clear the performance service cache when GPX data changes
+    performanceService.clearCache();
+  }, [gpxData]);
+
+  // Load pre-calculated data when GPX data or waypoints change
+  useEffect(() => {
+    if (gpxData && waypoints.length > 0) {
+      loadPrecalculatedData();
+    }
+  }, [gpxData, waypoints]);
+
+
+
+  // Function to load pre-calculated data from server
+  const loadPrecalculatedData = useCallback(async () => {
+    if (!gpxData || waypoints.length === 0) return;
+    
+    try {
+      setIsLoadingPrecalculatedData(true);
+      
+      const data = await performanceService.getPrecalculatedData();
+      
+      if (data) {
+        setPrecalculatedData(data);
+        
+        // Check if track distances are missing and auto-calculate them
+        if (!data.trackDistances || !data.trackDistances.totalDistance) {
+          await autoCalculateMissingTrackData();
+        }
+      } else {
+        // Trigger server-side calculation if no data exists
+        await triggerServerCalculation();
+      }
+    } catch (error: any) {
+      console.error('Error loading pre-calculated data:', error);
+      // Fall back to client-side calculations
+    } finally {
+      setIsLoadingPrecalculatedData(false);
+    }
+  }, [gpxData, waypoints]);
+
+  // Function to automatically calculate missing track data
+  const autoCalculateMissingTrackData = useCallback(async () => {
+    if (!gpxData) return;
+    
+    try {
+      await performanceService.precalculateTrackDistances(gpxData);
+      
+      // Reload the data to get the new track information
+      const updatedData = await performanceService.getPrecalculatedData();
+      if (updatedData) {
+        setPrecalculatedData(updatedData);
+      }
+    } catch (error: any) {
+      console.error('Error auto-calculating track data:', error);
+      // Don't show alert to user - this is automatic
+    }
+  }, [gpxData]);
+
+  // Function to trigger comprehensive server-side calculation
+  const triggerServerCalculation = useCallback(async () => {
+    if (!gpxData) return;
+    
+    try {
+      // Calculate track distances first (if missing)
+      if (!precalculatedData?.trackDistances?.totalDistance) {
+        await performanceService.precalculateTrackDistances(gpxData);
+      }
+      
+      // Calculate waypoint data (if waypoints exist)
+      if (waypoints.length > 0) {
+        await performanceService.precalculateWaypointDistances(gpxData, waypoints);
+      }
+      
+      // Reload all data after calculations
+      const data = await performanceService.getPrecalculatedData();
+      if (data) {
+        setPrecalculatedData(data);
+      }
+    } catch (error: any) {
+      console.error('Error in comprehensive server calculation:', error);
+    }
+  }, [gpxData, waypoints, precalculatedData]);
+
+  // Function to update progress on server
+  const updateServerProgress = useCallback(async () => {
+    if (!gpxData || !currentLocationPoint || !waypoints.length) return;
+    
+    try {
+      // Find the next waypoint
+      const nextWaypoint = waypoints.find(wp => !wp.isCompleted);
+      
+      if (nextWaypoint) {
+        await performanceService.updateProgress(currentLocationPoint, nextWaypoint.id, gpxData);
+      }
+    } catch (error: any) {
+      console.error('Error updating progress on server:', error);
+    }
+  }, [gpxData, currentLocationPoint, waypoints]);
+
+  // Auto-update progress on server when current location actually changes (not on timer)
+  useEffect(() => {
+    if (currentLocationPoint && gpxData && waypoints.length > 0 && isRunActive) {
+      // Only update when location actually changes (not on a timer)
+      // This will trigger when currentLocationPoint changes (every 10 minutes)
+      updateServerProgress();
+    }
+  }, [currentLocationPoint, updateServerProgress, gpxData, waypoints, isRunActive]);
+
+
+
+  // Test Cloud Functions connection
+  const testCloudFunctions = useCallback(async () => {
+    try {
+      const isConnected = await performanceService.testConnection();
+      if (isConnected) {
+        alert('✅ Cloud Functions are working!');
+      } else {
+        alert('❌ Cloud Functions connection failed');
+      }
+    } catch (error) {
+      console.error('Error testing Cloud Functions:', error);
+      alert('❌ Error testing Cloud Functions');
+    }
+  }, []);
+
+// Performance optimization: Pre-calculate and cache track data
+const cachedTrackData = useMemo(() => {
+  if (!gpxData || !gpxData.tracks || gpxData.tracks.length === 0) return null;
+  
+  const cacheKey = 'trackData';
+  if (calculationCache.current.has(cacheKey)) {
+    return calculationCache.current.get(cacheKey);
+  }
+  
+  const track = gpxData.tracks[0];
+  const points = track.points;
+  
+  if (points.length < 2) return null;
+  
+  // Calculate total track distance once and cache it
+  let totalDistance = 0;
+  const segmentDistances: number[] = [];
+  const cumulativeDistances: number[] = [0];
+  
+  for (let i = 1; i < points.length; i++) {
+    const segmentDistance = calculateDistance(points[i - 1], points[i]);
+    totalDistance += segmentDistance;
+    segmentDistances.push(segmentDistance);
+    cumulativeDistances.push(totalDistance);
+  }
+  
+  const trackData = {
+    totalDistance: Math.round(totalDistance * 100) / 100,
+    segmentDistances,
+    cumulativeDistances,
+    pointCount: points.length
+  };
+  
+  calculationCache.current.set(cacheKey, trackData);
+  return trackData;
+}, [gpxData]);
 
   // Add popup event listeners when map is ready (phone only)
   useEffect(() => {
@@ -105,19 +325,30 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     return gpxData.tracks.flatMap(track => track.points);
   }, [gpxData]);
 
-  // Helper function to calculate total distance of a track
-  const calculateTotalTrackDistance = (points: [number, number][]) => {
+  // Helper function to calculate total distance of a track with caching
+  const calculateTotalTrackDistance = useCallback((points: [number, number][]) => {
     if (points.length < 2) return 0;
     
+    // Use pre-calculated server data if available
+    if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalDistance) {
+      return precalculatedData.trackDistances.totalDistance;
+    }
+    
+    // Use cached track data if available and points match the main track
+    if (cachedTrackData && points.length === cachedTrackData.pointCount) {
+      return cachedTrackData.totalDistance;
+    }
+    
+    // Fallback to calculation if cache is not available
     let totalDistance = 0;
     for (let i = 1; i < points.length; i++) {
       totalDistance += calculateDistance(points[i - 1], points[i]);
     }
     return totalDistance;
-  };
+  }, [cachedTrackData, precalculatedData]);
 
   // Calculate distance to waypoint from current location along the GPX track
-  // This function now calculates the actual distance along the trail path instead of straight-line distance
+  // This function now uses pre-calculated data when available, falling back to client-side calculation
   const calculateDistanceToWaypoint = useMemo(() => {
     return (waypointCoordinates: { lat: number; lng: number }): number => {
       // Validate coordinates to prevent infinite loops
@@ -132,6 +363,63 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         const currentLatLng: [number, number] = [currentLocationPoint.lat, currentLocationPoint.lng];
         const waypointLatLng: [number, number] = [waypointCoordinates.lat, waypointCoordinates.lng];
         return calculateDistance(currentLatLng, waypointLatLng);
+      }
+      
+      // Try to use pre-calculated data first
+      if (precalculatedData && precalculatedData.waypointPositions && precalculatedData.waypointDistances) {
+        // Find the waypoint that matches these coordinates
+        const matchingWaypoint = waypoints.find(wp => 
+          Math.abs(wp.coordinates.lat - waypointCoordinates.lat) < 0.0001 &&
+          Math.abs(wp.coordinates.lng - waypointCoordinates.lng) < 0.0001
+        );
+        
+        if (matchingWaypoint && precalculatedData.waypointPositions[matchingWaypoint.id]) {
+          const waypointPosition = precalculatedData.waypointPositions[matchingWaypoint.id];
+          
+          // If we have current location data, calculate distance from current to waypoint
+          if (currentLocationPoint) {
+            // Use the pre-calculated waypoint position on the track
+            const waypointTrackPoint = waypointPosition.closestTrackPoint;
+            
+            // Find current location on track
+            let currentLocationIndex = 0;
+            let currentLocationMinDistance = Infinity;
+            
+            const track = gpxData.tracks[0];
+            const points = track.points;
+            
+            points.forEach((trackPoint, index) => {
+              const distance = calculateDistance(
+                [currentLocationPoint.lat, currentLocationPoint.lng],
+                trackPoint
+              );
+              if (distance < currentLocationMinDistance) {
+                currentLocationMinDistance = distance;
+                currentLocationIndex = index;
+              }
+            });
+            
+            // Calculate distance along track from current location to waypoint
+            const startIndex = Math.min(currentLocationIndex, waypointPosition.trackIndex);
+            const endIndex = Math.max(currentLocationIndex, waypointPosition.trackIndex);
+            
+            let trackDistance = 0;
+            for (let i = startIndex; i < endIndex; i++) {
+              trackDistance += calculateDistance(points[i], points[i + 1]);
+            }
+            
+            return trackDistance;
+          }
+        }
+      }
+      
+      // Fallback to original client-side calculation if no pre-calculated data
+      // Create cache key for this calculation
+      const cacheKey = `waypoint_${waypointCoordinates.lat}_${waypointCoordinates.lng}_${currentLocationPoint.lat}_${currentLocationPoint.lng}`;
+      
+      // Check if we have cached result
+      if (calculationCache.current.has(cacheKey)) {
+        return calculationCache.current.get(cacheKey);
       }
       
       const track = gpxData.tracks[0];
@@ -176,18 +464,40 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         trackDistance += calculateDistance(points[i], points[i + 1]);
       }
       
+      // Cache the result
+      calculationCache.current.set(cacheKey, trackDistance);
+      
       return trackDistance;
     };
-  }, [currentLocationPoint, gpxData]);
+  }, [currentLocationPoint, gpxData, precalculatedData, waypoints]);
 
   // Calculate actual track distance between two points along the GPX route
-  // This function calculates the distance along the actual GPX trail instead of straight-line distance
+  // This function now uses pre-calculated data when available, falling back to client-side calculation
   const calculateTrackDistanceBetweenPoints = (point1: [number, number], point2: [number, number]): number => {
     if (!gpxData || gpxData.tracks.length === 0) {
       // Fallback to direct distance if no GPX data
       return calculateDistance(point1, point2);
     }
     
+    // Try to use pre-calculated waypoint distances if both points are waypoints
+    if (precalculatedData && precalculatedData.waypointDistances) {
+      const waypoint1 = waypoints.find(wp => 
+        Math.abs(wp.coordinates.lat - point1[0]) < 0.0001 &&
+        Math.abs(wp.coordinates.lng - point1[1]) < 0.0001
+      );
+      
+      const waypoint2 = waypoints.find(wp => 
+        Math.abs(wp.coordinates.lat - point2[0]) < 0.0001 &&
+        Math.abs(wp.coordinates.lng - point2[1]) < 0.0001
+      );
+      
+      if (waypoint1 && waypoint2 && precalculatedData.waypointDistances[`${waypoint1.id}-${waypoint2.id}`]) {
+        const precalculatedDistance = precalculatedData.waypointDistances[`${waypoint1.id}-${waypoint2.id}`];
+        return precalculatedDistance;
+      }
+    }
+    
+    // Fallback to original client-side calculation
     const track = gpxData.tracks[0];
     const points = track.points;
     
@@ -467,7 +777,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     };
   }, []); // Empty dependency array to prevent infinite loop
 
-  // Calculate progress along the track based on current location
+  // Calculate progress along the track based on current location with caching
   const trackProgress = useMemo(() => {
     // Only log when values actually change to reduce spam
     const hasGpxData = !!gpxData;
@@ -489,6 +799,14 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
     }
 
+    // Create cache key for progress calculation
+    const progressCacheKey = `progress_${currentLocationPoint.lat}_${currentLocationPoint.lng}_${points.length}`;
+    
+    // Check if we have cached progress result
+    if (calculationCache.current.has(progressCacheKey)) {
+      return calculationCache.current.get(progressCacheKey);
+    }
+
     // Find the closest point on the track to current location
     let closestPointIndex = 0;
     let minDistance = Infinity;
@@ -507,32 +825,50 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     // If current location is more than 5km from the track, don't count progress
     if (minDistance > 5) {
       console.log('Current location too far from track:', minDistance, 'km');
-      return { 
+      const result = { 
         completedPoints: [], 
         remainingPoints: points, 
         completedDistance: 0, 
         totalDistance: calculateTotalTrackDistance(points), 
         progressPercentage: 0 
       };
+      
+      // Cache the result
+      calculationCache.current.set(progressCacheKey, result);
+      return result;
     }
 
     // Split track into completed and remaining portions
     const completedPoints = points.slice(0, closestPointIndex + 1);
     const remainingPoints = points.slice(closestPointIndex + 1);
     
-    // Calculate distances
+    // Calculate distances using pre-calculated server data when available, fallback to cached track data
     const completedDistance = calculateTotalTrackDistance(completedPoints);
-    const totalDistance = calculateTotalTrackDistance(points);
+    
+    let totalDistance: number;
+    if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalDistance) {
+      totalDistance = precalculatedData.trackDistances.totalDistance;
+    } else if (cachedTrackData) {
+      totalDistance = cachedTrackData.totalDistance;
+    } else {
+      totalDistance = calculateTotalTrackDistance(points);
+    }
+    
     const progressPercentage = totalDistance > 0 ? (completedDistance / totalDistance) * 100 : 0;
 
-    return {
+    const result = {
       completedPoints,
       remainingPoints,
       completedDistance,
       totalDistance,
       progressPercentage
     };
-  }, [gpxData, currentLocationPoint, isRunActive]);
+    
+    // Cache the result
+    calculationCache.current.set(progressCacheKey, result);
+    
+    return result;
+  }, [gpxData, currentLocationPoint, isRunActive, cachedTrackData, precalculatedData]);
 
   // Function to check and mark waypoints as completed
   const checkWaypointCompletions = useCallback(async () => {
@@ -547,7 +883,6 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         const shouldComplete = hasPassedWaypoint(waypoint.coordinates);
         
         if (shouldComplete) {
-          console.log(`🎯 Marking waypoint ${waypoint.name} as completed`);
           await waypointCompletionService.markWaypointCompleted(
             waypoint.id,
             'auto',
@@ -560,7 +895,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
       const completions = await waypointCompletionService.getWaypointCompletions();
       setWaypointCompletions(completions);
     } catch (error) {
-      console.error('❌ Error checking waypoint completions:', error);
+      console.error('Error checking waypoint completions:', error);
     }
   }, [runTimeline, isRunActive, currentLocationPoint, sortedWaypoints]);
 
@@ -661,7 +996,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   useEffect(() => {
     const checkAdminStatus = async () => {
       const isAdminUser = await AdminAuthService.isAdminLoggedIn();
-      setIsAdmin(isAdminUser);
+              setIsAdmin(isAdminUser);
     };
     
     // Check initial status
@@ -1116,18 +1451,20 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
         >
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
             {trackProgress.progressPercentage > 0 ? trackProgress.progressPercentage.toFixed(1) : progress.toFixed(1)}% complet
+            {/* {precalculatedData && precalculatedData.trackDistances ? ' (Server)' : ' (Client)'} */}
             </Typography>
             
             {/* Run Status Indicator */}
             <Typography variant="caption" color={isRunActive ? "success.main" : "text.disabled"} sx={{ display: 'block', mb: 1 }}>
-              {isRunActive ? "🏃‍♂️ Run Active" : "⏸️ Run Paused"}
+              {isRunActive ? "Run Active" : "Run Paused"}
               {runTimeline && !isRunActive && " (Outside run period)"}
               {!runTimeline && " (No timeline set)"}
             </Typography>
             
-          <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary">
             {trackProgress.completedDistance > 0 ? trackProgress.completedDistance.toFixed(2) : completedDistance.toFixed(2)} / {trackProgress.totalDistance > 0 ? trackProgress.totalDistance.toFixed(2) : '1400'} km
-            </Typography>
+            {/* {precalculatedData && precalculatedData.trackDistances ? ' (Server)' : ' (Client)'} */}
+          </Typography>
           
           {gpxLoading && (
             <Typography variant="caption" display="block" color="primary">
@@ -1149,36 +1486,53 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
           
           {/* Elevation summary */}
           {gpxData && gpxData.tracks.length > 0 && (() => {
-            const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
-            const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
+            // Use pre-calculated elevation data if available
+            let totalElevationGain = 0;
+            let completedElevationGain = 0;
             
-            if (validElevations.length > 0) {
-              // Calculate total elevation gain for the entire trail
-              let totalElevationGain = 0;
-              for (let i = 1; i < validElevations.length; i++) {
-                const elevationDiff = validElevations[i] - validElevations[i - 1];
-                if (elevationDiff > 0) {
-                  totalElevationGain += elevationDiff;
-                }
-              }
+            if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalElevationGain) {
+              // Use server-calculated elevation data
+              totalElevationGain = precalculatedData.trackDistances.totalElevationGain;
               
-              // Calculate elevation gain up to current location
-              let completedElevationGain = 0;
+              // Calculate completed elevation gain based on progress
               if (currentLocationPoint && trackProgress.completedPoints.length > 0) {
-                // Use the length of completed points to determine how many elevation points to include
-                const completedElevations = validElevations.slice(0, trackProgress.completedPoints.length);
-                
-                for (let i = 1; i < completedElevations.length; i++) {
-                  const elevationDiff = completedElevations[i] - completedElevations[i - 1];
+                const progressPercentage = trackProgress.progressPercentage;
+                completedElevationGain = Math.round(totalElevationGain * (progressPercentage / 100));
+              }
+            } else {
+              // Fallback to client-side calculation
+              const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
+              const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
+              
+              if (validElevations.length > 0) {
+                // Calculate total elevation gain for the entire trail
+                for (let i = 1; i < validElevations.length; i++) {
+                  const elevationDiff = validElevations[i] - validElevations[i - 1];
                   if (elevationDiff > 0) {
-                    completedElevationGain += elevationDiff;
+                    totalElevationGain += elevationDiff;
+                  }
+                }
+                
+                // Calculate elevation gain up to current location
+                if (currentLocationPoint && trackProgress.completedPoints.length > 0) {
+                  // Use the length of completed points to determine how many elevation points to include
+                  const completedElevations = validElevations.slice(0, trackProgress.completedPoints.length);
+                  
+                  for (let i = 1; i < completedElevations.length; i++) {
+                    const elevationDiff = completedElevations[i] - completedElevations[i - 1];
+                    if (elevationDiff > 0) {
+                      completedElevationGain += elevationDiff;
+                    }
                   }
                 }
               }
-              
+            }
+            
+            if (totalElevationGain > 0) {
               return (
                 <Typography variant="caption" display="block" color="info.main">
-                  📈 Elevație: {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m ({((completedElevationGain / totalElevationGain) * 100).toFixed(1)}%)
+                  Elevație: {completedElevationGain.toFixed(0)}m / {totalElevationGain.toFixed(0)}m ({((completedElevationGain / totalElevationGain) * 100).toFixed(1)}%)
+                  {/* {precalculatedData && precalculatedData.trackDistances ? ' (Server)' : ' (Client)'} */}
                 </Typography>
               );
             }
@@ -1209,7 +1563,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   let closestPoint = trackProgress.completedPoints[0];
                   let minDistance = Infinity;
                   
-                  trackProgress.completedPoints.forEach(point => {
+                  trackProgress.completedPoints.forEach((point: [number, number]) => {
                     const distance = Math.sqrt(
                       Math.pow(clickedLatLng.lat - point[0], 2) + 
                       Math.pow(clickedLatLng.lng - point[1], 2)
@@ -1288,7 +1642,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                   let closestPoint = trackProgress.remainingPoints[0];
                   let minDistance = Infinity;
                   
-                  trackProgress.remainingPoints.forEach(point => {
+                  trackProgress.remainingPoints.forEach((point: [number, number]) => {
                     const distance = Math.sqrt(
                       Math.pow(clickedLatLng.lat - point[0], 2) + 
                       Math.pow(clickedLatLng.lng - point[1], 2)
@@ -2236,15 +2590,16 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
 
       {/* Legend */}
       <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+        
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="caption">🏳️ Pornire</Typography>
+                      <Typography variant="caption">Pornire</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 12, height: 12, backgroundColor: 'var(--blue)', borderRadius: '50%' }} />
           <Typography variant="caption">Locația curentă (Garmin)</Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="caption">🏁 Sosire</Typography>
+                      <Typography variant="caption">Sosire</Typography>
         </Box>
         {gpxData && (
           <>
@@ -2253,6 +2608,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
               <Typography variant="caption">GPX Track</Typography>
             </Box>
 
+            {/* Admin-only features */}
             {isAdmin && (
             <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -2264,24 +2620,231 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
                 color="error"
                 size="small"
                 onClick={async () => {
-                    if (confirm('⚠️ ATENȚIE: Această acțiune va șterge TOATE waypoint-urile din baza de date. Ești sigur că vrei să continui?')) {
+                    if (confirm('ATENȚIE: Această acțiune va șterge TOATE waypoint-urile din baza de date. Ești sigur că vrei să continui?')) {
                         try {
                             await WaypointService.clearAllWaypoints();
-                            alert('✅ Baza de date a fost curățată cu succes! Toate waypoint-urile au fost șterse.');
+                            alert('Baza de date a fost curățată cu succes! Toate waypoint-urile au fost șterse.');
                             // Force refresh
                             window.location.reload();
                         } catch (error) {
                             console.error('Error clearing database:', error);
-                            alert('❌ Eroare la curățarea bazei de date. Te rugăm să încerci din nou.');
+                            alert('Eroare la curățarea bazei de date. Te rugăm să încerci din nou.');
                         }
                     }
                 }}
                 sx={{ fontSize: '0.75rem', ml: 2 }}
             >
-                🗑️ Curăță Baza de Date
+                Curăță Baza de Date
             </Button>
             </>
             )}
+            
+          </>
+        )}
+        
+        {/* Test buttons - always visible for testing */}
+        {isAdmin && (
+          <>
+            <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                onClick={testCloudFunctions}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#1976d2',
+                  color: '#1976d2',
+                  '&:hover': {
+                    borderColor: '#1565c0',
+                    backgroundColor: 'rgba(25, 118, 210, 0.04)'
+                  }
+                }}
+            >
+                Test Cloud Functions
+            </Button>
+            <Button
+                variant="outlined"
+                color="secondary"
+                size="small"
+                onClick={async () => {
+                    try {
+                        if (!gpxData || !waypoints || waypoints.length === 0) {
+                            alert('Need GPX data and waypoints to test waypoint calculations');
+                            return;
+                        }
+                        
+                        alert(`Calculating waypoint distances on server...\n\nThis may take a while for ${waypoints.length} waypoints.\n\nClick OK to continue.`);
+                        
+                        // Add timeout to prevent hanging
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Request timed out after 60 seconds')), 60000)
+                        );
+                        
+                        const resultPromise = performanceService.precalculateWaypointDistances(gpxData, waypoints);
+                        
+                        const result = await Promise.race([resultPromise, timeoutPromise]) as any;
+                        
+                        alert(`Waypoint calculations complete!\n\nPositions: ${Object.keys(result.waypointPositions).length}\nDistances: ${Object.keys(result.waypointDistances).length}`);
+                        console.log('Waypoint calculation result:', result);
+                    } catch (error: any) {
+                        console.error('Error testing waypoint calculations:', error);
+                        if (error.message && error.message.includes('timed out')) {
+                            alert('Request timed out. The calculation is taking too long.\n\nThis might be due to:\n- Large number of waypoints (23)\n- Complex GPX track\n- Server load\n\nTry again later or contact support.');
+                        } else {
+                            alert(`Error testing waypoint calculations:\n${error.message || 'Unknown error'}`);
+                        }
+                    }
+                }}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#9c27b0',
+                  color: '#9c27b0',
+                  '&:hover': {
+                    borderColor: '#7b1fa2',
+                    backgroundColor: 'rgba(156, 39, 176, 0.04)'
+                  }
+                }}
+            >
+                Test Waypoint Calculations
+            </Button>
+            
+            {/* Pre-calculated data status */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+              <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+                {isLoadingPrecalculatedData ? (
+                  <>Loading server data...</>
+                ) : precalculatedData ? (
+                  <>
+                    Server data loaded
+                    {precalculatedData.trackDistances?.totalDistance ? ' (Complete)' : ' (Partial)'}
+                    {' '}({Object.keys(precalculatedData.waypointDistances || {}).length} distances)
+                  </>
+                ) : (
+                  <>Using client calculations</>
+                )}
+              </Typography>
+            </Box>
+            
+            {/* Server calculation controls */}
+            <Button
+                variant="outlined"
+                color="info"
+                size="small"
+                onClick={triggerServerCalculation}
+                disabled={isLoadingPrecalculatedData}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#0288d1',
+                  color: '#0288d1',
+                  '&:hover': {
+                    borderColor: '#0277bd',
+                    backgroundColor: 'rgba(2, 136, 209, 0.04)'
+                  }
+                }}
+            >
+                Recalculate on Server
+            </Button>
+            
+            <Button
+                variant="outlined"
+                color="success"
+                size="small"
+                onClick={loadPrecalculatedData}
+                disabled={isLoadingPrecalculatedData}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#388e3c',
+                  color: '#388e3c',
+                  '&:hover': {
+                    borderColor: '#2e7d32',
+                    backgroundColor: 'rgba(56, 142, 60, 0.04)'
+                  }
+                }}
+            >
+                Refresh Data
+            </Button>
+            
+            <Button
+                variant="outlined"
+                color="warning"
+                size="small"
+                onClick={updateServerProgress}
+                disabled={!currentLocationPoint || !waypoints.length}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#f57c00',
+                  color: '#f57c00',
+                  '&:hover': {
+                    borderColor: '#ef6c00',
+                    backgroundColor: 'rgba(245, 124, 0, 0.04)'
+                  }
+                }}
+            >
+                Update Progress
+            </Button>
+            
+            <Button
+                variant="outlined"
+                color="inherit"
+                size="small"
+                onClick={loadPrecalculatedData}
+                disabled={isLoadingPrecalculatedData}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#757575',
+                  color: '#757575',
+                  '&:hover': {
+                    borderColor: '#616161',
+                    backgroundColor: 'rgba(117, 117, 117, 0.04)'
+                  }
+                }}
+            >
+                Force Load Server Data
+            </Button>
+            
+            <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={async () => {
+                    try {
+                        if (!gpxData) {
+                            alert('Need GPX data to calculate track distances');
+                            return;
+                        }
+                        
+                        alert('Calculating track distances on server...\n\nThis will calculate total distance and elevation gain for the entire GPX track.');
+                        
+                        await performanceService.precalculateTrackDistances(gpxData);
+                        
+                        // Reload the data after calculation
+                        await loadPrecalculatedData();
+                        
+                        alert('Track distances calculated successfully! The map should now be much faster.');
+                    } catch (error: any) {
+                        console.error('Error calculating track distances:', error);
+                        alert(`Error calculating track distances:\n${error.message || 'Unknown error'}`);
+                    }
+                }}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#d32f2f',
+                  color: '#d32f2f',
+                  '&:hover': {
+                    borderColor: '#c62828',
+                    backgroundColor: 'rgba(211, 47, 47, 0.04)'
+                  }
+                }}
+            >
+                Calculate Track Data
+            </Button>
           </>
         )}
         

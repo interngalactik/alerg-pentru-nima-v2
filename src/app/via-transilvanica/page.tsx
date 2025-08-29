@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
   Paper, 
   Button, 
   Container,
-  LinearProgress
+  LinearProgress,
+  CircularProgress
 } from '@mui/material';
 import { 
   LocationOn, 
@@ -24,7 +25,6 @@ import { parseGPX, ParsedGPX } from '@/lib/gpxParser';
 import { LocationPoint } from '@/lib/locationService';
 import { AdminAuthService } from '@/lib/adminAuthService';
 import { runTimelineService } from '@/lib/runTimelineService';
-
 
 // Dynamically import the map component to avoid SSR issues
 const TrailMap = dynamic(() => import('@/components/via-transilvanica/TrailMap'), {
@@ -51,7 +51,6 @@ const ViaTransilvanicaPage = () => {
   const [actualStartPoint, setActualStartPoint] = useState<[number, number] | null>(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [timelineLoaded, setTimelineLoaded] = useState(false);
-
 
   // Set client-side flag after mount to prevent hydration issues
   useEffect(() => {
@@ -130,8 +129,6 @@ const ViaTransilvanicaPage = () => {
     const progress = (completedDistance / totalDistance) * 100;
     setCurrentProgress(Math.min(progress, 100));
   }, [completedDistance, totalDistance]);
-
-
 
   // Calculate countdown only on client side
   const timeUntilStart = isClient ? startDate.getTime() - currentDate.getTime() : 0;
@@ -231,104 +228,75 @@ const ViaTransilvanicaPage = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Get total km run from localStorage (fetched by main page)
+  // Get total km run from Strava - always fetch fresh data
   useEffect(() => {
-    const getTotalKmRun = () => {
-      try {
-        const savedKmRun = localStorage.getItem('lastKmRun');
-        if (savedKmRun) {
-          const kmRun = parseFloat(savedKmRun);
-          setTotalKmRun(kmRun);
-          setKmRunLoading(false);
-        } else {
-          // If no data in localStorage, fetch from Strava
-          fetchStravaData();
-        }
-      } catch (error) {
-        console.error('Error reading km run from localStorage:', error);
-        // If localStorage fails, try fetching from Strava
-        fetchStravaData();
-      }
-    };
-
-    // Fallback function to fetch Strava data directly
     const fetchStravaData = async () => {
       try {
         setKmRunLoading(true);
         
-        // First try to get from localStorage
-        const savedKmRun = localStorage.getItem('lastKmRun');
-        const savedCheckTime = localStorage.getItem('lastCheckTime');
+        // First refresh the token
+        const refreshResponse = await fetch(STRAVA_CALL_REFRESH, {
+          method: 'POST'
+        });
         
-        // Check if we have recent data (less than 1 hour old)
-        if (savedKmRun && savedCheckTime) {
-          const lastCheck = new Date(savedCheckTime);
-          const now = new Date();
-          const hoursDiff = (now.getTime() - lastCheck.getTime()) / (1000 * 60 * 60);
-          
-          if (hoursDiff < 1) {
-            // Use cached data if it's recent
-            setTotalKmRun(parseFloat(savedKmRun));
-            setKmRunLoading(false);
-            return;
-          }
+        if (!refreshResponse.ok) {
+          throw new Error('Failed to refresh Strava token');
         }
         
-        // If no recent data, fetch from Strava using the same logic as main page
+        const refreshData = await refreshResponse.json();
+        const accessToken = refreshData.access_token;
+        
+        // Fetch activities from multiple pages
+        const endpoints = [
+          `${STRAVA_CALL_ACTIVITIES + accessToken}&page=1`,
+          `${STRAVA_CALL_ACTIVITIES + accessToken}&page=2`,
+          `${STRAVA_CALL_ACTIVITIES + accessToken}&page=3`,
+          `${STRAVA_CALL_ACTIVITIES + accessToken}&page=4`,
+          `${STRAVA_CALL_ACTIVITIES + accessToken}&page=5`
+        ];
+        
+        const responses = await Promise.all(endpoints.map(endpoint => fetch(endpoint)));
+        const activitiesData = await Promise.all(responses.map(response => response.json()));
+        
+        // Calculate total distance from running activities only (same as main page)
+        let ALL_ACTIVITIES: any[] = [];
+        activitiesData.forEach((activityArray) => {
+          ALL_ACTIVITIES = ALL_ACTIVITIES.concat(activityArray);
+        });
+        
+        const runs = ALL_ACTIVITIES.filter((activity: any) => activity.type === 'Run');
+        const totalDistanceMeters = runs.reduce((acc, run) => acc + run.distance, 0);
+        const totalKm = Math.round(totalDistanceMeters * 100 / 1000) / 100; // Same rounding as main page
+        
+        // Save to localStorage for consistency with main page
+        localStorage.setItem('lastKmRun', totalKm.toString());
+        localStorage.setItem('lastCheckTime', new Date().toISOString());
+        
+        setTotalKmRun(totalKm);
+      } catch (error) {
+        console.error('Error fetching Strava data:', error);
+        
+        // Fallback to localStorage if Strava fetch fails
         try {
-          // First refresh the token
-          const refreshResponse = await fetch(STRAVA_CALL_REFRESH, {
-            method: 'POST'
-          });
-          
-          if (!refreshResponse.ok) {
-            throw new Error('Failed to refresh Strava token');
+          const savedKmRun = localStorage.getItem('lastKmRun');
+          if (savedKmRun) {
+            const kmRun = parseFloat(savedKmRun);
+            setTotalKmRun(kmRun);
+            console.log('Using cached data from localStorage due to Strava fetch error');
+          } else {
+            setTotalKmRun(0);
           }
-          
-          const refreshData = await refreshResponse.json();
-          const accessToken = refreshData.access_token;
-          
-          // Fetch activities from multiple pages
-          const endpoints = [
-            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=1`,
-            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=2`,
-            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=3`,
-            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=4`,
-            `${STRAVA_CALL_ACTIVITIES + accessToken}&page=5`
-          ];
-          
-          const responses = await Promise.all(endpoints.map(endpoint => fetch(endpoint)));
-          const activitiesData = await Promise.all(responses.map(response => response.json()));
-          
-          // Calculate total distance from running activities only (same as main page)
-          let ALL_ACTIVITIES: any[] = [];
-          activitiesData.forEach((activityArray) => {
-            ALL_ACTIVITIES = ALL_ACTIVITIES.concat(activityArray);
-          });
-          
-          const runs = ALL_ACTIVITIES.filter((activity: any) => activity.type === 'Run');
-          const totalDistanceMeters = runs.reduce((acc, run) => acc + run.distance, 0);
-          const totalKm = Math.round(totalDistanceMeters * 100 / 1000) / 100; // Same rounding as main page
-          
-          // Save to localStorage
-          localStorage.setItem('lastKmRun', totalKm.toString());
-          localStorage.setItem('lastCheckTime', new Date().toISOString());
-          
-          setTotalKmRun(totalKm);
-        } catch (stravaError) {
-          console.warn('Failed to fetch Strava data:', stravaError);
+        } catch (localError) {
+          console.error('Error reading from localStorage:', localError);
           setTotalKmRun(0);
         }
-      } catch (error) {
-        console.error('Error in fetchStravaData:', error);
-        setTotalKmRun(0);
       } finally {
         setKmRunLoading(false);
       }
     };
 
-    // Get initial value
-    getTotalKmRun();
+    // Always fetch fresh data on page load
+    fetchStravaData();
 
     // Listen for storage changes (in case main page updates the value)
     const handleStorageChange = (e: StorageEvent) => {
@@ -339,15 +307,14 @@ const ViaTransilvanicaPage = () => {
 
     window.addEventListener('storage', handleStorageChange);
 
-    // Also check periodically for updates (in case user navigates between pages)
-    const intervalId = setInterval(getTotalKmRun, 30000); // Check every 30 seconds
+    // Refresh Strava data every 15 minutes to keep it current
+    const intervalId = setInterval(fetchStravaData, 15 * 60 * 1000); // 15 minutes
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(intervalId);
     };
   }, []);
-
 
   return (
     <>
@@ -392,7 +359,7 @@ const ViaTransilvanicaPage = () => {
       )}
       
       <Container maxWidth="xl" sx={{ py: 4 }}>
-                {/* Hero Section */}
+        {/* Hero Section */}
         <Box sx={{ textAlign: 'center', mb: 6 }}>
           <Typography variant="h4" component="h1" sx={{ 
             fontWeight: 'bold', 
@@ -407,19 +374,17 @@ const ViaTransilvanicaPage = () => {
           </Typography>
 
           {/* Mission Statement */}
-        
-
           <Box sx={{ mb: 4, maxWidth: '60em', mx: 'auto' }}>
             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.2rem', lineHeight: 1.6 }}>
-                             Salutare! Eu sunt <a href="/#despre" style={{ textDecoration: 'underline' }}>Edi</a> și pe 1 septembrie 2025 {isClient && timeUntilStart > 0 ? 'voi porni' : 'am pornit'} în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
+              Salutare! Eu sunt <a href="/#despre" style={{ textDecoration: 'underline' }}>Edi</a> și pe 1 septembrie 2025 {isClient && timeUntilStart > 0 ? 'voi porni' : 'am pornit'} în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
               <a href="https://sanctuarnima.ro" target='__blank'><strong style={{ color: 'var(--orange)', textDecoration: 'underline' }}>Sanctuarul Nima</strong></a> - primul sanctuar din România 
               destinat animalelor de fermă salvate de la abator sau exploatare. Aici își trăiesc viețile acum în pace și armonie peste <a href="https://sanctuarnima.ro/rezidenti/" target='__blank' style={{ color: 'var(--blue)', fontWeight: '900', textDecoration: 'underline' }}>140 de animale</a> din 12 specii diferite.
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, fontSize: '1.2rem', lineHeight: 1.6 }}>
               Însă nu o pot face fără ajutorul tău. Pentru a putea acoperi costurile de hrană lunară sanctuarul are nevoie de <span style={{ color: 'var(--blue)', fontWeight: '900' }}>7000 de SMS-uri</span> în valoare de <span style={{ color: 'var(--blue)', fontWeight: '900' }}>2 euro / lună</span>. Alătură-te și tu celor <span style={{ color: 'var(--orange)', fontWeight: '900' }}>{smsCount}</span> de susținători.
-<br></br>
-<br></br>
-Iar eu alerg pentru fiecare mesaj în parte.
+              <br></br>
+              <br></br>
+              Iar eu alerg pentru fiecare mesaj în parte.
             </Typography>
           </Box>
 
@@ -489,9 +454,9 @@ Iar eu alerg pentru fiecare mesaj în parte.
                   Am alergat*
                 </Typography>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                  <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
-                  {kmRunLoading ? 'Se încarcă...' : `${totalKmRun.toFixed(2)}/7000`}
-                </Typography>
+                  <Typography variant="h5" sx={{ color: 'var(--orange)', fontWeight: 'bold' }}>
+                    {kmRunLoading ? 'Se încarcă...' : `${totalKmRun.toFixed(2)}/7000`}
+                  </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {kmRunLoading ? '...' : `${((totalKmRun / 7000) * 100).toFixed(1)}%`}
                   </Typography>
@@ -510,7 +475,7 @@ Iar eu alerg pentru fiecare mesaj în parte.
                 />
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontStyle: 'italic', display: 'flex' }}>
                   * kilometri alergați de la începutul campaniei
-                  {kmRunLoading && ' (se încarcă din Strava...)'}
+                  {kmRunLoading}
                 </Typography>
               </Box>
 
@@ -565,13 +530,13 @@ Iar eu alerg pentru fiecare mesaj în parte.
                 onClick={() => {
                   const smsBody = "NIMA";
                   const smsNumber = "8845";
-                  
+                   
                   // Check if it's Android
                   const isAndroid = /android/i.test(navigator.userAgent);
                   const smsLink = isAndroid 
                     ? `sms:${smsNumber}?body=${smsBody}`  // Android format
                     : `sms://${smsNumber}&body=${encodeURIComponent(smsBody)}`; // iOS format
-                  
+                   
                   window.location.href = smsLink;
                 }}
                 sx={{ 
@@ -594,13 +559,12 @@ Iar eu alerg pentru fiecare mesaj în parte.
               </Typography>
 
               <Typography variant="body2" sx={{ fontWeight: '400', mt: 2, color: 'var(--blue)', fontSize: '1rem', }}>
-              Vrei să susții sanctuarul și mai mult? {' '}
+                Vrei să susții sanctuarul și mai mult? {' '}
                 <a href="https://sanctuarnima.ro/implica-te/" target='__blank' style={{ textDecoration: 'underline', fontWeight: '600' }}>Implică-te!</a>
               </Typography>
             </Box>
           </Box>
         </Box>
-
 
         {/* Map Section */}
         <Paper sx={{ 
@@ -610,23 +574,21 @@ Iar eu alerg pentru fiecare mesaj în parte.
           <Typography variant="h6" sx={{ mb: 2, color: 'var(--blue)' }}>
             Traseul Via Transilvanica
           </Typography>
-                      <TrailMap
-              currentLocation={currentLocation ? { lat: currentLocation.lat, lng: currentLocation.lng } : { lat: 46.0569, lng: 24.2603 }}
-              progress={currentProgress}
-              completedDistance={completedDistance}
-              onStartPointChange={handleStartPointChange}
-              onProgressUpdate={handleProgressUpdate}
-            />
+          <TrailMap
+            currentLocation={currentLocation ? { lat: currentLocation.lat, lng: currentLocation.lng } : { lat: 46.0569, lng: 24.2603 }}
+            progress={currentProgress}
+            completedDistance={completedDistance}
+            onStartPointChange={handleStartPointChange}
+            onProgressUpdate={handleProgressUpdate}
+          />
         </Paper>
 
-                {/* Garmin InReach Tracker */}
-                <GarminTracker 
+        {/* Garmin InReach Tracker */}
+        <GarminTracker 
           totalDistance={trackProgress?.totalDistance || totalDistance}
           trackProgress={trackProgress}
           elevationData={elevationData}
         />
-
-
       </Container>
     </>
   );
