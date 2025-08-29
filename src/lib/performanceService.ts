@@ -14,6 +14,9 @@ const getPrecalculatedData = httpsCallable(functions, 'getPrecalculatedData');
 const updateProgress = httpsCallable(functions, 'updateProgress');
 const recalculateAll = httpsCallable(functions, 'recalculateAll');
 const calculatePopupData = httpsCallable(functions, 'calculatePopupData');
+const calculateProgress = httpsCallable(functions, 'calculateProgress');
+const calculateWaypointDistances = httpsCallable(functions, 'calculateWaypointDistances');
+const calculateCurrentLocationDistances = httpsCallable(functions, 'calculateCurrentLocationDistances');
 
 export interface PrecalculatedTrackData {
   totalDistance: number;
@@ -54,6 +57,15 @@ export interface ProgressData {
   distanceToNextWaypoint: number;
   nextWaypointId: string;
   calculatedAt: number;
+}
+
+export interface ServerProgressData {
+  completedPoints: [number, number][];
+  remainingPoints: [number, number][];
+  completedDistance: number;
+  totalDistance: number;
+  progressPercentage: number;
+  sortedWaypoints: any[];
 }
 
 export interface PrecalculatedData {
@@ -152,6 +164,75 @@ export class PerformanceService {
       }
     } catch (error) {
       console.error('Error calculating popup data:', error);
+      throw error;
+    }
+  }
+
+    // Calculate complete progress data on server (NEW)
+  async calculateProgress(gpxData: any, waypoints: any[], currentLocation: any, isRunActive: boolean): Promise<ServerProgressData> {
+    try {
+      const result = await calculateProgress({ gpxData, waypoints, currentLocation, isRunActive });
+      const data = result.data as any;
+      
+      if (data.success) {
+        // Cache the result locally
+        this.cache.set('progress', {
+          data: data.data,
+          timestamp: Date.now()
+        });
+        
+        return data.data;
+      } else {
+        throw new Error(data.error || 'Failed to calculate progress');
+      }
+    } catch (error: any) {
+      console.error('Error calculating progress:', error);
+      throw error;
+    }
+  }
+
+  // Calculate waypoint distances on server (NEW)
+  async calculateWaypointDistances(gpxData: any, waypoints: any[]): Promise<Record<string, any>> {
+    try {
+      const result = await calculateWaypointDistances({ gpxData, waypoints });
+      const data = result.data as any;
+      
+      if (data.success) {
+        // Cache the result locally
+        this.cache.set('waypointDistances', {
+          data: data.data,
+          timestamp: Date.now()
+        });
+        
+        return data.data;
+      } else {
+        throw new Error(data.error || 'Failed to calculate waypoint distances');
+      }
+    } catch (error: any) {
+      console.error('Error calculating waypoint distances:', error);
+      throw error;
+    }
+  }
+
+  // Calculate current location to waypoint distances on server (NEW)
+  async calculateCurrentLocationDistances(gpxData: any, waypoints: any[], currentLocation: any): Promise<Record<string, any>> {
+    try {
+      const result = await calculateCurrentLocationDistances({ gpxData, waypoints, currentLocation });
+      const data = result.data as any;
+      
+      if (data.success) {
+        // Cache the result locally
+        this.cache.set('currentLocationDistances', {
+          data: data.data,
+          timestamp: Date.now()
+        });
+        
+        return data.data;
+      } else {
+        throw new Error(data.error || 'Failed to calculate current location distances');
+      }
+    } catch (error: any) {
+      console.error('Error calculating current location distances:', error);
       throw error;
     }
   }

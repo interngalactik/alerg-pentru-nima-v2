@@ -7,7 +7,7 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-import { onCall } from 'firebase-functions/v2/https';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin
@@ -653,5 +653,358 @@ export const recalculateAll = onCall(async (request) => {
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error'
     };
+  }
+});
+
+// Calculate complete progress data on server (NEW)
+export const calculateProgress = onCall<{
+  gpxData: GPXData;
+  waypoints: Waypoint[];
+  currentLocation: CurrentLocation;
+  isRunActive: boolean;
+}>(async (request) => {
+  try {
+    const { gpxData, waypoints, currentLocation, isRunActive } = request.data;
+    
+    if (!gpxData || !waypoints || !currentLocation) {
+      throw new Error('Missing required data');
+    }
+
+    if (!isRunActive) {
+      return {
+        success: true,
+        data: {
+          completedPoints: [],
+          remainingPoints: [],
+          completedDistance: 0,
+          totalDistance: 0,
+          progressPercentage: 0,
+          sortedWaypoints: []
+        }
+      };
+    }
+
+    const track = gpxData.tracks[0];
+    if (!track || !track.points || track.points.length === 0) {
+      throw new Error('Invalid GPX track data');
+    }
+
+    const points = track.points;
+    
+    // Find the closest point on the track to current location
+    let closestPointIndex = 0;
+    let minDistance = Infinity;
+
+    points.forEach((point, index) => {
+      const distance = calculateDistance(
+        [currentLocation.lat, currentLocation.lng],
+        point
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPointIndex = index;
+      }
+    });
+
+    // If current location is more than 5km from the track, don't count progress
+    if (minDistance > 5) {
+      return {
+        success: true,
+        data: {
+          completedPoints: [],
+          remainingPoints: points,
+          completedDistance: 0,
+          totalDistance: 0,
+          progressPercentage: 0,
+          sortedWaypoints: []
+        }
+      };
+    }
+
+    // Split track into completed and remaining portions
+    const completedPoints = points.slice(0, closestPointIndex + 1);
+    const remainingPoints = points.slice(closestPointIndex + 1);
+    
+    // Calculate completed distance
+    let completedDistance = 0;
+    for (let i = 1; i < completedPoints.length; i++) {
+      completedDistance += calculateDistance(completedPoints[i - 1], completedPoints[i]);
+    }
+    
+    // Calculate total distance
+    let totalDistance = 0;
+    for (let i = 1; i < points.length; i++) {
+      totalDistance += calculateDistance(points[i - 1], points[i]);
+    }
+    
+    const progressPercentage = totalDistance > 0 ? (completedDistance / totalDistance) * 100 : 0;
+
+    // Calculate sorted waypoints with track indices
+    const waypointsWithTrackIndex = waypoints.map(waypoint => {
+      let closestIndex = 0;
+      let minDistance = Infinity;
+
+      points.forEach((point, index) => {
+        const distance = calculateDistance(
+          [waypoint.coordinates.lat, waypoint.coordinates.lng],
+          point
+        );
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      return {
+        ...waypoint,
+        trackIndex: closestIndex
+      };
+    });
+
+    const sortedWaypoints = waypointsWithTrackIndex
+      .sort((a, b) => a.trackIndex - b.trackIndex)
+      .map(({ trackIndex, ...waypoint }) => waypoint);
+
+    const result = {
+      completedPoints,
+      remainingPoints,
+      completedDistance,
+      totalDistance,
+      progressPercentage,
+      sortedWaypoints
+    };
+
+    // Store results in database
+    const db = admin.database();
+    await db.ref('precalculated/progress').set(result);
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error calculating progress:', error);
+    throw new HttpsError('internal', 'Failed to calculate progress');
+  }
+});
+
+// Calculate waypoint distances and elevation gains on server (NEW)
+export const calculateWaypointDistances = onCall<{
+  gpxData: GPXData;
+  waypoints: Waypoint[];
+}>(async (request) => {
+  try {
+    const { gpxData, waypoints } = request.data;
+    
+    if (!gpxData || !waypoints || waypoints.length === 0) {
+      throw new Error('Missing required data');
+    }
+
+    const track = gpxData.tracks[0];
+    if (!track || !track.points || track.points.length === 0) {
+      throw new Error('Invalid GPX track data');
+    }
+
+    const points = track.points;
+    const elevation = track.elevation || [];
+    
+    // Calculate distances between all waypoints
+    const waypointDistances: Record<string, {
+      waypoint1: string;
+      waypoint2: string;
+      distance: number;
+      elevationGain: number;
+      calculatedAt: number;
+    }> = {};
+
+    for (let i = 0; i < waypoints.length; i++) {
+      for (let j = i + 1; j < waypoints.length; j++) {
+        const waypoint1 = waypoints[i];
+        const waypoint2 = waypoints[j];
+        
+        // Find closest points on track for both waypoints
+        let point1Index = 0;
+        let point2Index = 0;
+        let minDist1 = Infinity;
+        let minDist2 = Infinity;
+        
+        points.forEach((point, index) => {
+          const dist1 = calculateDistance(
+            [waypoint1.coordinates.lat, waypoint1.coordinates.lng], 
+            point
+          );
+          const dist2 = calculateDistance(
+            [waypoint2.coordinates.lat, waypoint2.coordinates.lng], 
+            point
+          );
+          
+          if (dist1 < minDist1) {
+            minDist1 = dist1;
+            point1Index = index;
+          }
+          
+          if (dist2 < minDist2) {
+            minDist2 = dist2;
+            point2Index = index;
+          }
+        });
+        
+        // Calculate distance along the track between these points
+        const startIndex = Math.min(point1Index, point2Index);
+        const endIndex = Math.max(point1Index, point2Index);
+        
+        let trackDistance = 0;
+        for (let k = startIndex; k < endIndex; k++) {
+          if (k + 1 < points.length) {
+            trackDistance += calculateDistance(points[k], points[k + 1]);
+          }
+        }
+        
+        // Calculate elevation gain between these points
+        let elevationGain = 0;
+        if (elevation.length > 0) {
+          for (let k = startIndex + 1; k <= endIndex; k++) {
+            if (k < elevation.length && k - 1 < elevation.length) {
+              const currentElev = elevation[k];
+              const prevElev = elevation[k - 1];
+              
+              if (typeof currentElev === 'number' && typeof prevElev === 'number' && 
+                  !isNaN(currentElev) && !isNaN(prevElev)) {
+                const elevationDiff = currentElev - prevElev;
+                if (elevationDiff > 0) {
+                  elevationGain += elevationDiff;
+                }
+              }
+            }
+          }
+        }
+        
+        const key = `${waypoint1.id}-${waypoint2.id}`;
+        waypointDistances[key] = {
+          waypoint1: waypoint1.id,
+          waypoint2: waypoint2.id,
+          distance: Math.round(trackDistance * 100) / 100,
+          elevationGain: Math.round(elevationGain),
+          calculatedAt: Date.now()
+        };
+      }
+    }
+
+    // Store results in database
+    const db = admin.database();
+    await db.ref('precalculated/waypointDistances').set(waypointDistances);
+
+    return { success: true, data: waypointDistances };
+  } catch (error) {
+    console.error('Error calculating waypoint distances:', error);
+    throw new HttpsError('internal', 'Failed to calculate waypoint distances');
+  }
+});
+
+// Calculate current location to waypoint distances on server (NEW)
+export const calculateCurrentLocationDistances = onCall<{
+  gpxData: GPXData;
+  waypoints: Waypoint[];
+  currentLocation: CurrentLocation;
+}>(async (request) => {
+  try {
+    const { gpxData, waypoints, currentLocation } = request.data;
+    
+    if (!gpxData || !waypoints || !currentLocation) {
+      throw new Error('Missing required data');
+    }
+
+    const track = gpxData.tracks[0];
+    if (!track || !track.points || track.points.length === 0) {
+      throw new Error('Invalid GPX track data');
+    }
+
+    const points = track.points;
+    const elevation = track.elevation || [];
+    
+    // Find current location on track
+    let currentLocationIndex = 0;
+    let currentLocationMinDistance = Infinity;
+    
+    points.forEach((point, index) => {
+      const distance = calculateDistance(
+        [currentLocation.lat, currentLocation.lng],
+        point
+      );
+      if (distance < currentLocationMinDistance) {
+        currentLocationMinDistance = distance;
+        currentLocationIndex = index;
+      }
+    });
+    
+    // Calculate distances and elevation gains to all waypoints
+    const waypointDistances: Record<string, {
+      distanceFromCurrent: number;
+      elevationGainFromCurrent: number;
+      currentLocationIndex: number;
+      waypointIndex: number;
+      calculatedAt: number;
+    }> = {};
+
+    for (const waypoint of waypoints) {
+      // Find closest point on track for waypoint
+      let waypointIndex = 0;
+      let waypointMinDistance = Infinity;
+      
+      points.forEach((point, index) => {
+        const distance = calculateDistance(
+          [waypoint.coordinates.lat, waypoint.coordinates.lng],
+          point
+        );
+        if (distance < waypointMinDistance) {
+          waypointMinDistance = distance;
+          waypointIndex = index;
+        }
+      });
+      
+      // Calculate distance along track from current location to waypoint
+      const startIndex = Math.min(currentLocationIndex, waypointIndex);
+      const endIndex = Math.max(currentLocationIndex, waypointIndex);
+      
+      let trackDistance = 0;
+      for (let i = startIndex; i < endIndex; i++) {
+        if (i + 1 < points.length) {
+          trackDistance += calculateDistance(points[i], points[i + 1]);
+        }
+      }
+      
+      // Calculate elevation gain along track from current location to waypoint
+      let elevationGain = 0;
+      if (elevation.length > 0) {
+        for (let i = startIndex + 1; i <= endIndex; i++) {
+          if (i < elevation.length && i - 1 < elevation.length) {
+            const currentElev = elevation[i];
+            const prevElev = elevation[i - 1];
+            
+            if (typeof currentElev === 'number' && typeof prevElev === 'number' && 
+                !isNaN(currentElev) && !isNaN(prevElev)) {
+              const elevationDiff = currentElev - prevElev;
+              if (elevationDiff > 0) {
+                elevationGain += elevationDiff;
+              }
+            }
+          }
+        }
+      }
+      
+      waypointDistances[waypoint.id] = {
+        distanceFromCurrent: Math.round(trackDistance * 100) / 100,
+        elevationGainFromCurrent: Math.round(elevationGain),
+        currentLocationIndex,
+        waypointIndex,
+        calculatedAt: Date.now()
+      };
+    }
+
+    // Store results in database
+    const db = admin.database();
+    await db.ref('precalculated/currentLocationDistances').set(waypointDistances);
+
+    return { success: true, data: waypointDistances };
+  } catch (error) {
+    console.error('Error calculating current location distances:', error);
+    throw new HttpsError('internal', 'Failed to calculate current location distances');
   }
 });
