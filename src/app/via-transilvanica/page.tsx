@@ -115,11 +115,11 @@ const ViaTransilvanicaPage = () => {
     loadRunTimeline();
   }, [isClient, timelineLoaded]);
 
-  // Update current date every second for countdown
+  // Update current date every minute for countdown (performance optimized)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentDate(new Date());
-    }, 1000);
+    }, 60000); // Changed from 1000ms to 60000ms (1 minute)
 
     return () => clearInterval(timer);
   }, []);
@@ -419,14 +419,14 @@ const ViaTransilvanicaPage = () => {
                     minute
                   </Typography>
                 </Box>
-                <Box sx={{ textAlign: 'center', minWidth: 60 }}>
+                {/* <Box sx={{ textAlign: 'center', minWidth: 60 }}>
                   <Typography variant="h5" sx={{ color: 'var(--blue)', fontWeight: 'bold' }}>
                     {secondsUntilStart.toString().padStart(2, '0')}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     secunde
                   </Typography>
-                </Box>
+                </Box> */}
               </Box>
             </Box>
           )}

@@ -142,12 +142,13 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     performanceService.clearCache();
   }, [gpxData]);
 
-  // Load pre-calculated data when GPX data or waypoints change
+  // Load pre-calculated data when GPX data or waypoints change - Performance optimized
   useEffect(() => {
-    if (gpxData && waypoints.length > 0) {
+    if (gpxData && waypoints.length > 0 && !precalculatedData) {
+      // Only load if we don't already have data (prevents unnecessary server calls)
       loadPrecalculatedData();
     }
-  }, [gpxData, waypoints]);
+  }, [gpxData, waypoints, precalculatedData]);
 
 
 
@@ -1071,13 +1072,24 @@ const cachedTrackData = useMemo(() => {
     // Load initial location
     loadInitialLocation();
 
-    // Subscribe to real-time location updates
+    // Subscribe to real-time location updates - Performance optimized
     const unsubscribe = locationService.onLatestLocationUpdate((latestLocation) => {
-      // console.log('Current location updated:', latestLocation);
-      if (latestLocation) {
-        // console.log('Setting current location point:', latestLocation.lat, latestLocation.lng);
+      // Only update if location actually changed significantly (prevents unnecessary re-renders)
+      if (latestLocation && currentLocationPoint) {
+        const latDiff = Math.abs(latestLocation.lat - currentLocationPoint.lat);
+        const lngDiff = Math.abs(latestLocation.lng - currentLocationPoint.lng);
+        
+        // Only update if location changed by more than 1 meter (roughly 0.00001 degrees)
+        if (latDiff > 0.00001 || lngDiff > 0.00001) {
+          setCurrentLocationPoint(latestLocation);
+        }
+      } else if (latestLocation && !currentLocationPoint) {
+        // First location - always set it
+        setCurrentLocationPoint(latestLocation);
+      } else if (!latestLocation) {
+        // No location available
+        setCurrentLocationPoint(null);
       }
-      setCurrentLocationPoint(latestLocation);
     });
 
     return unsubscribe;
