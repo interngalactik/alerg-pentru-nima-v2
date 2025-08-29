@@ -40,7 +40,7 @@ interface CurrentLocation {
 function calculateDistance(point1: [number, number], point2: [number, number]): number {
   const R = 6371; // Earth's radius in kilometers
   const dLat = (point2[0] - point1[0]) * Math.PI / 180;
-  const dLon = (point2[1] - point2[1]) * Math.PI / 180;
+  const dLon = (point2[1] - point1[1]) * Math.PI / 180;  // FIXED: was point2[1] - point2[1]
   const a = 
     Math.sin(dLat/2) * Math.sin(dLat/2) +
     Math.cos(point1[0] * Math.PI / 180) * Math.cos(point2[0] * Math.PI / 180) * 
@@ -66,6 +66,40 @@ export const testFunction = onCall(async (request) => {
   } catch (error) {
     return { 
       success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+// Test distance calculation function to verify accuracy
+export const testDistanceCalculation = onCall(async (request) => {
+  try {
+    // Test with known coordinates (Bucharest to Cluj-Napoca)
+    const bucharest: [number, number] = [44.4268, 26.1025];
+    const cluj: [number, number] = [46.7833, 23.6000];
+    
+    // Calculate distance using our function
+    const calculatedDistance = calculateDistance(bucharest, cluj);
+    
+    // Expected distance is approximately 300-350 km
+    const expectedDistance = 320; // Approximate real-world distance
+    
+    return {
+      success: true,
+      message: 'Distance calculation test completed',
+      test: {
+        point1: bucharest,
+        point2: cluj,
+        calculatedDistance: Math.round(calculatedDistance * 100) / 100,
+        expectedDistance,
+        difference: Math.round((calculatedDistance - expectedDistance) * 100) / 100,
+        isAccurate: Math.abs(calculatedDistance - expectedDistance) < 50 // Within 50km
+      },
+      timestamp: Date.now()
+    };
+  } catch (error) {
+    return {
+      success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }

@@ -99,7 +99,7 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [gpxLoading, setGpxLoading] = useState(false);
   const [gpxError, setGpxError] = useState<string | null>(null);
   const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
-  const [waypointsTimestamp, setWaypointsTimestamp] = useState<number>(Date.now());
+  // Removed waypointsTimestamp state - no longer needed for performance optimization
   const [showWaypointForm, setShowWaypointForm] = useState(false);
   const [editingWaypoint, setEditingWaypoint] = useState<Waypoint | null>(null);
   const [isCoordinateSelectionMode, setIsCoordinateSelectionMode] = useState(false);
@@ -553,55 +553,39 @@ const cachedTrackData = useMemo(() => {
     return trackDistance;
   };
 
-  // Use server-sorted waypoints if available, otherwise fall back to client sorting
+  // Sort waypoints by their position along the GPX track - Performance optimized
   const sortedWaypoints = useMemo(() => {
-    // If we have server progress with sorted waypoints, use it
+    // If we have server progress with sorted waypoints, use it (FAST)
     if (serverProgress && serverProgress.sortedWaypoints) {
       return serverProgress.sortedWaypoints;
     }
     
-    // Fallback to client-side sorting (only if server data unavailable)
-    if (!waypoints.length || !gpxData || gpxData.tracks.length === 0) {
-      return waypoints;
-    }
+    // Simple fallback - just return waypoints as-is to avoid heavy calculations
+    // The server should handle all sorting in normal operation
+    return waypoints;
+  }, [serverProgress, waypoints]);
 
-    const track = gpxData.tracks[0];
-    const points = track.points;
-
-    // Calculate the closest track point index for each waypoint
-    const waypointsWithTrackIndex = waypoints.map(waypoint => {
-      let closestIndex = 0;
-      let minDistance = Infinity;
-
-      points.forEach((point, index) => {
-        const distance = calculateDistance(
-          [waypoint.coordinates.lat, waypoint.coordinates.lng],
-          point
-        );
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestIndex = index;
-        }
-      });
-
-      return {
-        ...waypoint,
-        trackIndex: closestIndex
-      };
-    });
-
-    // Sort by track index (position along the route)
-    return waypointsWithTrackIndex
-      .sort((a, b) => a.trackIndex - b.trackIndex)
-      .map(({ trackIndex, ...waypoint }) => waypoint); // Remove trackIndex from final result
-  }, [serverProgress, waypoints, gpxData]);
-
-  // Calculate distance from last waypoint or start - now uses server data
+  // Calculate distance from last waypoint or start - Performance optimized
   const calculateDistanceFromLastWaypoint = useCallback((waypointIndex: number) => {
     if (!sortedWaypoints.length) return { distance: 0, fromName: '' };
     
     const currentWaypoint = sortedWaypoints[waypointIndex];
     
+    // Try to use server data first (FAST)
+    if (precalculatedData?.waypointDistances && waypointIndex > 0) {
+      const previousWaypoint = sortedWaypoints[waypointIndex - 1];
+      const waypointKey = `${previousWaypoint.id}-${currentWaypoint.id}`;
+      const serverDistance = precalculatedData.waypointDistances[waypointKey];
+      
+      if (serverDistance) {
+        return { 
+          distance: serverDistance.distance, 
+          fromName: previousWaypoint.name 
+        };
+      }
+    }
+    
+    // Fallback to client calculation if server data unavailable
     if (waypointIndex === 0) {
       // First waypoint - calculate from start of GPX track
       if (gpxData && gpxData.tracks.length > 0) {
@@ -618,19 +602,8 @@ const cachedTrackData = useMemo(() => {
       return { distance: 0, fromName: 'Start' };
     }
     
-    // For other waypoints, use server-calculated distances if available
+    // For other waypoints, calculate from previous waypoint
     const previousWaypoint = sortedWaypoints[waypointIndex - 1];
-    
-    // Try to use server data first
-    if (precalculatedData?.waypointDistances) {
-      const waypointKey = `${previousWaypoint.id}-${currentWaypoint.id}`;
-      const serverDistance = precalculatedData.waypointDistances[waypointKey];
-      if (serverDistance) {
-        return { distance: serverDistance.distance, fromName: previousWaypoint.name };
-      }
-    }
-    
-    // Fallback to client calculation if server data unavailable
     const distance = calculateTrackDistanceBetweenPoints(
       [previousWaypoint.coordinates.lat, previousWaypoint.coordinates.lng],
       [currentWaypoint.coordinates.lat, currentWaypoint.coordinates.lng]
@@ -839,79 +812,98 @@ const cachedTrackData = useMemo(() => {
     };
   }, []); // Empty dependency array to prevent infinite loop
 
-  // Server-side progress calculation - much faster than client-side processing
-
-  // Calculate progress on server when location changes
-  useEffect(() => {
-    if (gpxData && currentLocationPoint && waypoints.length > 0 && isRunActive) {
-      const calculateProgressOnServer = async () => {
-        try {
-          const progressData = await performanceService.calculateProgress(
-            gpxData, 
-            waypoints, 
-            currentLocationPoint, 
-            isRunActive
-          );
-          setServerProgress(progressData);
-        } catch (error) {
-          console.error('Error calculating progress on server:', error);
-          // Fall back to client-side calculation if server fails
-        }
-      };
-      
-      calculateProgressOnServer();
-    }
-  }, [gpxData, currentLocationPoint, waypoints, isRunActive]);
-
-  // Automatically calculate waypoint distances on server when waypoints change
-  useEffect(() => {
-    if (gpxData && waypoints.length > 0) {
-      const calculateWaypointDistancesOnServer = async () => {
-        try {
-          await performanceService.calculateWaypointDistances(gpxData, waypoints);
-          console.log('✅ Waypoint distances automatically calculated on server');
-        } catch (error) {
-          console.error('Error automatically calculating waypoint distances:', error);
-          // Fall back to existing pre-calculated data
-        }
-      };
-      
-      calculateWaypointDistancesOnServer();
-    }
-  }, [gpxData, waypoints]);
-
-  // Automatically calculate current location distances when location changes
-  useEffect(() => {
-    if (gpxData && currentLocationPoint && waypoints.length > 0) {
-      const calculateCurrentLocationDistancesOnServer = async () => {
-        try {
-          await performanceService.calculateCurrentLocationDistances(gpxData, waypoints, currentLocationPoint);
-          console.log('✅ Current location distances automatically calculated on server');
-        } catch (error) {
-          console.error('Error automatically calculating current location distances:', error);
-          // Fall back to existing pre-calculated data
-        }
-      };
-      
-      calculateCurrentLocationDistancesOnServer();
-    }
-  }, [gpxData, currentLocationPoint, waypoints]);
-
-  // Use server progress if available, otherwise fall back to client calculation
+  // Calculate progress along the track based on current location with caching
   const trackProgress = useMemo(() => {
-    // If we have server progress, use it
-    if (serverProgress) {
-      return serverProgress;
+    // Only log when values actually change to reduce spam
+    const hasGpxData = !!gpxData;
+    const hasLocation = !!currentLocationPoint;
+    
+    // If run is not active, show no progress
+    if (!isRunActive) {
+      return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
     }
     
-    // Fallback to minimal client calculation (only if server data unavailable)
     if (!gpxData || !currentLocationPoint || gpxData.tracks.length === 0) {
       return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
     }
 
-    // Simple fallback - just return empty progress
-    return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
-  }, [serverProgress, gpxData, currentLocationPoint]);
+    const track = gpxData.tracks[0]; // Use the first track
+    const points = track.points;
+    
+    if (points.length === 0) {
+      return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
+    }
+
+    // Create cache key for progress calculation
+    const progressCacheKey = `progress_${currentLocationPoint.lat}_${currentLocationPoint.lng}_${points.length}`;
+    
+    // Check if we have cached progress result
+    if (calculationCache.current.has(progressCacheKey)) {
+      return calculationCache.current.get(progressCacheKey);
+    }
+
+    // Find the closest point on the track to current location
+    let closestPointIndex = 0;
+    let minDistance = Infinity;
+
+    points.forEach((point, index) => {
+      const distance = calculateDistance(
+        [currentLocationPoint.lat, currentLocationPoint.lng],
+        point
+      );
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestPointIndex = index;
+      }
+    });
+
+    // If current location is more than 5km from the track, don't count progress
+    if (minDistance > 5) {
+      console.log('Current location too far from track:', minDistance, 'km');
+      const result = { 
+        completedPoints: [], 
+        remainingPoints: points, 
+        completedDistance: 0, 
+        totalDistance: calculateTotalTrackDistance(points), 
+        progressPercentage: 0 
+      };
+      
+      // Cache the result
+      calculationCache.current.set(progressCacheKey, result);
+      return result;
+    }
+
+    // Split track into completed and remaining portions
+    const completedPoints = points.slice(0, closestPointIndex + 1);
+    const remainingPoints = points.slice(closestPointIndex + 1);
+    
+    // Calculate distances using pre-calculated server data when available, fallback to cached track data
+    const completedDistance = calculateTotalTrackDistance(completedPoints);
+    
+    let totalDistance: number;
+    if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalDistance) {
+      totalDistance = precalculatedData.trackDistances.totalDistance;
+    } else if (cachedTrackData) {
+      totalDistance = cachedTrackData.totalDistance;
+    } else {
+      totalDistance = calculateTotalTrackDistance(points);
+    }
+    
+    const progressPercentage = totalDistance > 0 ? (completedDistance / totalDistance) * 100 : 0;
+
+    const result = {
+      completedPoints,
+      remainingPoints,
+      completedDistance,
+      totalDistance,
+      progressPercentage
+    };
+    
+    // Cache the result
+    calculationCache.current.set(progressCacheKey, result);
+    
+    return result;
+  }, [gpxData, currentLocationPoint, isRunActive, cachedTrackData, precalculatedData]);
 
   // Function to check and mark waypoints as completed
   const checkWaypointCompletions = useCallback(async () => {
@@ -1029,7 +1021,7 @@ const cachedTrackData = useMemo(() => {
       }
       
       setWaypoints(validWaypoints);
-      setWaypointsTimestamp(Date.now()); // Force re-render of waypoint markers
+                // Removed setWaypointsTimestamp(Date.now()) to prevent unnecessary re-renders
     });
 
     return unsubscribe;
@@ -1112,15 +1104,14 @@ const cachedTrackData = useMemo(() => {
       }
       
       // Refresh waypoints to show updated coordinates on the map
-      setTimeout(async () => {
-        try {
-          const refreshedWaypoints = await WaypointService.getAllWaypoints();
-          setWaypoints(refreshedWaypoints);
-          setWaypointsTimestamp(Date.now()); // Force re-render of waypoint markers
-        } catch (refreshError) {
-          console.error('Error refreshing waypoints:', refreshError);
-        }
-      }, 100); // Small delay to ensure Firebase update is processed
+      // Removed setTimeout for better performance - Firebase updates are usually immediate
+      try {
+        const refreshedWaypoints = await WaypointService.getAllWaypoints();
+        setWaypoints(refreshedWaypoints);
+        // Removed setWaypointsTimestamp(Date.now()) to prevent unnecessary re-renders
+      } catch (refreshError) {
+        console.error('Error refreshing waypoints:', refreshError);
+      }
       
       setShowWaypointForm(false);
       setEditingWaypoint(null);
@@ -1149,15 +1140,14 @@ const cachedTrackData = useMemo(() => {
       await WaypointService.deleteWaypoint(waypointId);
       
       // Force refresh waypoints to ensure proper ordering
-      setTimeout(async () => {
-        try {
-          const refreshedWaypoints = await WaypointService.getAllWaypoints();
-          setWaypoints(refreshedWaypoints);
-          setWaypointsTimestamp(Date.now()); // Force re-render of waypoint markers
-        } catch (refreshError) {
-          console.error('Error refreshing waypoints:', refreshError);
-        }
-      }, 100); // Small delay to ensure Firebase update is processed
+      // Removed setTimeout for better performance - Firebase updates are usually immediate
+      try {
+        const refreshedWaypoints = await WaypointService.getAllWaypoints();
+        setWaypoints(refreshedWaypoints);
+        // Removed setWaypointsTimestamp(Date.now()) to prevent unnecessary re-renders
+      } catch (refreshError) {
+        console.error('Error refreshing waypoints:', refreshError);
+      }
       
     } catch (error) {
       console.error('Error deleting waypoint:', error);
@@ -2097,7 +2087,7 @@ const cachedTrackData = useMemo(() => {
             
             return (
         <Marker 
-            key={`${waypoint.id}-${waypointsTimestamp}`}
+            key={`${waypoint.id}-${waypoint.coordinates.lat}-${waypoint.coordinates.lng}`}
             position={[waypoint.coordinates.lat, waypoint.coordinates.lng]}
             icon={L.divIcon({
               html: `<div style="background-color: ${waypoint.type === 'finish-start' ? 'var(--orange)' : '#4ECDC4'}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 10px;">${index + 1}</div>`,
@@ -2226,33 +2216,15 @@ const cachedTrackData = useMemo(() => {
                             <strong>Distanță de la {distanceInfo.fromName === 'Start' ? 'start' : `punctul ${distanceInfo.fromName}`}:</strong> {distanceInfo.distance.toFixed(2)} km
                           </Typography>
                           {(() => {
-                            let elevationGainFromPrevious = 0;
-                            
-                            if (index > 0) {
-                              // Try to use server data first
-                              if (precalculatedData?.waypointDistances) {
-                                const waypointKey = `${sortedWaypoints[index - 1].id}-${waypoint.id}`;
-                                const serverDistance = precalculatedData.waypointDistances[waypointKey];
-                                if (serverDistance) {
-                                  elevationGainFromPrevious = serverDistance.elevationGain;
-                                }
-                              }
-                              
-                              // Fallback to client calculation if server data unavailable
-                              if (elevationGainFromPrevious === 0) {
-                                elevationGainFromPrevious = calculateElevationGain(
+                            const elevationGainFromPrevious = index > 0 
+                              ? calculateElevationGain(
                                   [sortedWaypoints[index - 1].coordinates.lat, sortedWaypoints[index - 1].coordinates.lng],
                                   [waypoint.coordinates.lat, waypoint.coordinates.lng]
+                                )
+                              : calculateElevationGain(
+                                  [gpxData?.tracks[0]?.points[0]?.[0] || 0, gpxData?.tracks[0]?.points[0]?.[1] || 0],
+                                  [waypoint.coordinates.lat, waypoint.coordinates.lng]
                                 );
-                              }
-                            } else {
-                              // First waypoint - calculate from start
-                              elevationGainFromPrevious = calculateElevationGain(
-                                [gpxData?.tracks[0]?.points[0]?.[0] || 0, gpxData?.tracks[0]?.points[0]?.[1] || 0],
-                                [waypoint.coordinates.lat, waypoint.coordinates.lng]
-                              );
-                            }
-                            
                             return elevationGainFromPrevious > 0 ? (
                               <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
                                 <strong>Urcare de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1].name}`}:</strong> {elevationGainFromPrevious.toFixed(0)} m
@@ -2789,76 +2761,6 @@ const cachedTrackData = useMemo(() => {
                 }}
             >
                 Test Waypoint Calculations
-            </Button>
-
-            <Button
-                variant="outlined"
-                color="success"
-                size="small"
-                onClick={async () => {
-                    try {
-                        if (!gpxData || !waypoints || waypoints.length === 0) {
-                            alert('Need GPX data and waypoints to test new waypoint distances');
-                            return;
-                        }
-                        
-                        alert(`Calculating new waypoint distances on server...\n\nThis may take a while for ${waypoints.length} waypoints.\n\nClick OK to continue.`);
-                        
-                        const result = await performanceService.calculateWaypointDistances(gpxData, waypoints);
-                        alert(`✅ New waypoint distances calculated successfully!\n\nDistances: ${Object.keys(result).length}`);
-                        console.log('New waypoint distances result:', result);
-                    } catch (error: any) {
-                        console.error('Error testing new waypoint distances:', error);
-                        alert(`❌ Error calculating new waypoint distances:\n${error.message || 'Unknown error'}`);
-                    }
-                }}
-                sx={{ 
-                  fontSize: '0.75rem', 
-                  ml: 1,
-                  borderColor: '#4caf50',
-                  color: '#4caf50',
-                  '&:hover': {
-                    borderColor: '#388e3c',
-                    backgroundColor: 'rgba(76, 175, 80, 0.04)'
-                  }
-                }}
-            >
-                Test New Waypoint Distances
-            </Button>
-
-            <Button
-                variant="outlined"
-                color="warning"
-                size="small"
-                onClick={async () => {
-                    try {
-                        if (!gpxData || !waypoints || !currentLocationPoint) {
-                            alert('Need GPX data, waypoints, and current location to test current location distances');
-                            return;
-                        }
-                        
-                        alert(`Calculating current location distances on server...\n\nThis may take a while for ${waypoints.length} waypoints.\n\nClick OK to continue.`);
-                        
-                        const result = await performanceService.calculateCurrentLocationDistances(gpxData, waypoints, currentLocationPoint);
-                        alert(`✅ Current location distances calculated successfully!\n\nDistances: ${Object.keys(result).length}`);
-                        console.log('Current location distances result:', result);
-                    } catch (error: any) {
-                        console.error('Error testing current location distances:', error);
-                        alert(`❌ Error calculating current location distances:\n${error.message || 'Unknown error'}`);
-                    }
-                }}
-                sx={{ 
-                  fontSize: '0.75rem', 
-                  ml: 1,
-                  borderColor: '#ff9800',
-                  color: '#ff9800',
-                  '&:hover': {
-                    borderColor: '#f57c00',
-                    backgroundColor: 'rgba(255, 152, 0, 0.04)'
-                  }
-                }}
-            >
-                Test Current Location Distances
             </Button>
             
             {/* Pre-calculated data status */}
