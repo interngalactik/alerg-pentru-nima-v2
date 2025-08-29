@@ -142,13 +142,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     performanceService.clearCache();
   }, [gpxData]);
 
-  // Load pre-calculated data when GPX data or waypoints change - Performance optimized
+  // Load pre-calculated data when GPX data or waypoints change
   useEffect(() => {
-    if (gpxData && waypoints.length > 0 && !precalculatedData) {
-      // Only load if we don't already have data (prevents unnecessary server calls)
+    if (gpxData && waypoints.length > 0) {
       loadPrecalculatedData();
     }
-  }, [gpxData, waypoints, precalculatedData]);
+  }, [gpxData, waypoints]);
 
 
 
@@ -265,42 +264,12 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     }
   }, []);
 
-// Performance optimization: Pre-calculate and cache track data
+// Performance optimization: Pre-calculate and cache track data - DISABLED FOR PERFORMANCE
 const cachedTrackData = useMemo(() => {
-  if (!gpxData || !gpxData.tracks || gpxData.tracks.length === 0) return null;
-  
-  const cacheKey = 'trackData';
-  if (calculationCache.current.has(cacheKey)) {
-    return calculationCache.current.get(cacheKey);
-  }
-  
-  const track = gpxData.tracks[0];
-  const points = track.points;
-  
-  if (points.length < 2) return null;
-  
-  // Calculate total track distance once and cache it
-  let totalDistance = 0;
-  const segmentDistances: number[] = [];
-  const cumulativeDistances: number[] = [0];
-  
-  for (let i = 1; i < points.length; i++) {
-    const segmentDistance = calculateDistance(points[i - 1], points[i]);
-    totalDistance += segmentDistance;
-    segmentDistances.push(segmentDistance);
-    cumulativeDistances.push(totalDistance);
-  }
-  
-  const trackData = {
-    totalDistance: Math.round(totalDistance * 100) / 100,
-    segmentDistances,
-    cumulativeDistances,
-    pointCount: points.length
-  };
-  
-  calculationCache.current.set(cacheKey, trackData);
-  return trackData;
-}, [gpxData]);
+  // TEMPORARILY DISABLED - This was processing 38,000+ GPX points on every render
+  // Return null to prevent expensive calculations
+  return null;
+}, []);
 
   // Add popup event listeners when map is ready (phone only)
   useEffect(() => {
@@ -354,10 +323,10 @@ const cachedTrackData = useMemo(() => {
       return precalculatedData.trackDistances.totalDistance;
     }
     
-    // Use cached track data if available and points match the main track
-    if (cachedTrackData && points.length === cachedTrackData.pointCount) {
-      return cachedTrackData.totalDistance;
-    }
+    // Cached track data temporarily disabled for performance
+    // if (cachedTrackData && points.length === cachedTrackData.pointCount) {
+    //   return cachedTrackData.totalDistance;
+    // }
     
     // Fallback to calculation if cache is not available
     let totalDistance = 0;
@@ -884,8 +853,8 @@ const cachedTrackData = useMemo(() => {
     let totalDistance: number;
     if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalDistance) {
       totalDistance = precalculatedData.trackDistances.totalDistance;
-    } else if (cachedTrackData) {
-      totalDistance = cachedTrackData.totalDistance;
+    // } else if (cachedTrackData) {
+    //   totalDistance = cachedTrackData.totalDistance;
     } else {
       totalDistance = calculateTotalTrackDistance(points);
     }
@@ -1072,24 +1041,13 @@ const cachedTrackData = useMemo(() => {
     // Load initial location
     loadInitialLocation();
 
-    // Subscribe to real-time location updates - Performance optimized
+    // Subscribe to real-time location updates
     const unsubscribe = locationService.onLatestLocationUpdate((latestLocation) => {
-      // Only update if location actually changed significantly (prevents unnecessary re-renders)
-      if (latestLocation && currentLocationPoint) {
-        const latDiff = Math.abs(latestLocation.lat - currentLocationPoint.lat);
-        const lngDiff = Math.abs(latestLocation.lng - currentLocationPoint.lng);
-        
-        // Only update if location changed by more than 1 meter (roughly 0.00001 degrees)
-        if (latDiff > 0.00001 || lngDiff > 0.00001) {
-          setCurrentLocationPoint(latestLocation);
-        }
-      } else if (latestLocation && !currentLocationPoint) {
-        // First location - always set it
-        setCurrentLocationPoint(latestLocation);
-      } else if (!latestLocation) {
-        // No location available
-        setCurrentLocationPoint(null);
+      // console.log('Current location updated:', latestLocation);
+      if (latestLocation) {
+        // console.log('Setting current location point:', latestLocation.lat, latestLocation.lng);
       }
+      setCurrentLocationPoint(latestLocation);
     });
 
     return unsubscribe;
