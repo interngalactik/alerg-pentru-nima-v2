@@ -859,8 +859,8 @@ const cachedTrackData = useMemo(() => {
     checkRunStatus();
     loadCompletions();
     
-    // Check run status every 5 minutes instead of every minute to reduce loops
-    const interval = setInterval(checkRunStatus, 300000); // Check every 5 minutes
+         // Check run status every 5 minutes instead of every minute to reduce loops
+     const interval = setInterval(checkRunStatus, 300000); // Check every 5 minutes
     const completionsUnsubscribe = waypointCompletionService.onCompletionsUpdate(setWaypointCompletions);
     
     return () => {
@@ -1388,7 +1388,122 @@ const cachedTrackData = useMemo(() => {
     }
   }, [waypointPopupData, popupDataLoading]);
 
-  // Pre-load all waypoint data for instant popup display
+  // Function to check if waypoint data is loading
+  const isWaypointDataLoading = useCallback((waypointId: string) => {
+    return popupDataLoading[waypointId] || !waypointPopupData[waypointId];
+  }, [popupDataLoading, waypointPopupData]);
+
+  // Smart background updates - only update modified waypoints incrementally
+  const startSmartBackgroundUpdates = useCallback(async () => {
+    if (!waypoints.length || !currentLocationPoint || !gpxData) return;
+    
+    try {
+      console.log('🚀 Starting smart background updates for modified waypoints...');
+      
+      const { performanceService } = await import('@/lib/performanceService');
+      
+      // Get current cached data to compare (use location-based key without time)
+      const cacheKey = `waypointData_${currentLocationPoint.lat}_${currentLocationPoint.lng}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      const currentData = cachedData ? JSON.parse(cachedData) : {};
+      
+      // Check if cache is still valid (within 10 minutes)
+      const cacheTimestamp = currentData._cacheTimestamp || 0;
+      const isCacheValid = (Date.now() - cacheTimestamp) < (10 * 60 * 1000); // 10 minutes
+      
+      if (!isCacheValid) {
+        console.log('⏰ Cache expired, all waypoints need updates');
+        // Return early - let the main preload function handle this
+        return;
+      }
+      
+      // Identify which waypoints need updates (based on location change threshold)
+      const LOCATION_CHANGE_THRESHOLD = 0.1; // 100 meters
+      const waypointsNeedingUpdates: string[] = [];
+      
+      for (const waypoint of waypoints) {
+        const waypointData = currentData[waypoint.id];
+        if (!waypointData) {
+          // No data for this waypoint
+          waypointsNeedingUpdates.push(waypoint.id);
+          continue;
+        }
+        
+        const currentDistance = waypointData.distanceFromCurrent;
+        const lastCalculatedDistance = waypointData.lastCalculatedDistance || currentDistance;
+        
+        // Check if distance changed significantly
+        if (Math.abs(currentDistance - lastCalculatedDistance) > LOCATION_CHANGE_THRESHOLD) {
+          waypointsNeedingUpdates.push(waypoint.id);
+          console.log(`🔄 Waypoint ${waypoint.id} needs update: ${lastCalculatedDistance.toFixed(2)} → ${currentDistance.toFixed(2)} km`);
+        }
+      }
+      
+      console.log(`📊 ${waypointsNeedingUpdates.length} waypoints need updates out of ${waypoints.length} total`);
+      
+      if (waypointsNeedingUpdates.length === 0) {
+        console.log('✅ All waypoints are up to date, no updates needed');
+        return;
+      }
+      
+      // Update waypoints incrementally in the background
+      const BATCH_SIZE = 5; // Smaller batches for smoother updates
+      const updatedData = { ...currentData };
+      
+      for (let i = 0; i < waypointsNeedingUpdates.length; i += BATCH_SIZE) {
+        const batch = waypointsNeedingUpdates.slice(i, i + BATCH_SIZE);
+        console.log(`🔄 Updating batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} waypoints`);
+        
+        // Process batch in parallel
+        const batchPromises = batch.map(async (waypointId) => {
+          try {
+            const data = await performanceService.getPrecalculatedWaypointData(waypointId);
+            if (data) {
+              // Add metadata for change detection
+              data.lastCalculatedDistance = data.distanceFromCurrent;
+              data.lastUpdated = Date.now();
+              return { id: waypointId, data };
+            }
+          } catch (error) {
+            console.error(`❌ Error updating waypoint ${waypointId}:`, error);
+          }
+          return null;
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        
+        // Update data incrementally
+        batchResults.forEach(result => {
+          if (result) {
+            updatedData[result.id] = result.data;
+            console.log(`✅ Updated waypoint ${result.id}: ${result.data.distanceFromCurrent.toFixed(2)} km`);
+          }
+        });
+        
+        // Update state immediately for this batch (real-time updates)
+        setWaypointPopupData({ ...updatedData });
+        
+        // Update cache with new data
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(updatedData));
+        } catch (error) {
+          console.warn('⚠️ Failed to update cache:', error);
+        }
+        
+        // Small delay between batches for smooth background processing
+        if (i + BATCH_SIZE < waypointsNeedingUpdates.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      
+      console.log(`✅ Smart background updates completed for ${waypointsNeedingUpdates.length} waypoints`);
+      
+    } catch (error) {
+      console.error('❌ Error in smart background updates:', error);
+    }
+  }, [waypoints, currentLocationPoint, gpxData]);
+
+  // Pre-load all waypoint data for instant popup display with batch loading and caching
   const preloadAllWaypointData = useCallback(async () => {
     if (!waypoints.length || !currentLocationPoint || !gpxData) return;
     
@@ -1396,6 +1511,33 @@ const cachedTrackData = useMemo(() => {
       console.log('🔄 Pre-loading waypoint data for instant popups...');
       
       const { performanceService } = await import('@/lib/performanceService');
+      
+      // Check client-side cache first (use location-based key without time)
+      const cacheKey = `waypointData_${currentLocationPoint.lat}_${currentLocationPoint.lng}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      
+      if (cachedData) {
+        try {
+          const parsedData = JSON.parse(cachedData);
+          
+          // Check if cache is still valid (within 10 minutes)
+          const cacheTimestamp = parsedData._cacheTimestamp || 0;
+          const isCacheValid = (Date.now() - cacheTimestamp) < (10 * 60 * 1000); // 10 minutes
+          
+          if (isCacheValid) {
+            console.log('📦 Using cached waypoint data:', Object.keys(parsedData).length, 'waypoints');
+            setWaypointPopupData(parsedData);
+            
+            // Start smart background updates after initial load
+            setTimeout(() => startSmartBackgroundUpdates(), 1000);
+            return;
+          } else {
+            console.log('⏰ Cache expired, fetching fresh data...');
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to parse cached data, fetching fresh data...');
+        }
+      }
       
       // Trigger server-side pre-calculation
       const result = await performanceService.precalculateAllWaypointData(
@@ -1407,39 +1549,125 @@ const cachedTrackData = useMemo(() => {
       if (result) {
         console.log('✅ Waypoint data pre-calculated successfully');
         
-        // Load the pre-calculated data for all waypoints
+        // Load the pre-calculated data in batches of 10
+        const BATCH_SIZE = 10;
         const allWaypointData: Record<string, any> = {};
+        console.log(`🔄 Starting batch loading for ${waypoints.length} waypoints (batch size: ${BATCH_SIZE})`);
         
-        for (const waypoint of waypoints) {
-          try {
-            const data = await performanceService.getPrecalculatedWaypointData(waypoint.id);
-            if (data) {
-              allWaypointData[waypoint.id] = data;
+        // Process waypoints in batches
+        for (let i = 0; i < waypoints.length; i += BATCH_SIZE) {
+          const batch = waypoints.slice(i, i + BATCH_SIZE);
+          console.log(`📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}: waypoints ${i + 1}-${Math.min(i + BATCH_SIZE, waypoints.length)}`);
+          
+          // Process batch in parallel
+          const batchPromises = batch.map(async (waypoint) => {
+            try {
+              const data = await performanceService.getPrecalculatedWaypointData(waypoint.id);
+              if (data) {
+                // Add metadata for change detection
+                data.lastCalculatedDistance = data.distanceFromCurrent;
+                data.lastUpdated = Date.now();
+                return { id: waypoint.id, data };
+              }
+            } catch (error) {
+              console.error(`❌ Error loading data for waypoint ${waypoint.id}:`, error);
             }
-          } catch (error) {
-            console.warn(`⚠️ Could not load data for waypoint ${waypoint.id}:`, error);
+            return null;
+          });
+          
+          const batchResults = await Promise.all(batchPromises);
+          
+          // Add batch results to all data
+          batchResults.forEach(result => {
+            if (result) {
+              allWaypointData[result.id] = result.data;
+            }
+          });
+          
+          // Update state with current batch results (progressive display)
+          console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1} complete, updating state with ${Object.keys(allWaypointData).length} waypoints`);
+          setWaypointPopupData({ ...allWaypointData });
+          
+          // Small delay between batches to prevent overwhelming the UI
+          if (i + BATCH_SIZE < waypoints.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
         
-        setWaypointPopupData(allWaypointData);
-        console.log(`✅ Loaded data for ${Object.keys(allWaypointData).length} waypoints`);
+        // Cache the final result for 10 minutes
+        try {
+          // Add cache timestamp
+          allWaypointData._cacheTimestamp = Date.now();
+          localStorage.setItem(cacheKey, JSON.stringify(allWaypointData));
+          console.log('💾 Cached waypoint data for 10 minutes');
+        } catch (error) {
+          console.warn('⚠️ Failed to cache waypoint data:', error);
+        }
+        
+        console.log(`✅ Completed loading data for ${Object.keys(allWaypointData).length} waypoints`);
+        
+        // Start smart background updates after initial load
+        setTimeout(() => startSmartBackgroundUpdates(), 1000);
+        
+        // Debug: Log the first few waypoints to see their order
+        console.log('🔍 First 5 waypoints in sorted order:');
+        waypoints.slice(0, 5).forEach((waypoint, index) => {
+          const data = allWaypointData[waypoint.id];
+          console.log(`  ${index}: ${waypoint.name} - Distance: ${data?.distanceFromPrevious?.toFixed(2) || 'N/A'} km, Elevation: ${data?.elevationGainFromPrevious?.toFixed(0) || 'N/A'} m`);
+        });
       }
     } catch (error) {
       console.error('❌ Error pre-loading waypoint data:', error);
     }
-  }, [waypoints, currentLocationPoint, gpxData]);
+  }, [waypoints, currentLocationPoint, gpxData, startSmartBackgroundUpdates]);
 
   // Pre-load waypoint data when map is ready and has all necessary data
   useEffect(() => {
-    if (mapRef.current && waypoints.length > 0 && currentLocationPoint && gpxData && isRunActive) {
+    console.log('🔍 useEffect check for auto-preloading:', {
+      hasMapRef: !!mapRef.current,
+      waypointsLength: waypoints.length,
+      hasCurrentLocation: !!currentLocationPoint,
+      hasGpxData: !!gpxData,
+      isRunActive: isRunActive
+    });
+    
+    // Log current state values for debugging
+    console.log('📊 Current state values:', {
+      waypoints: waypoints.slice(0, 3).map(w => ({ id: w.id, name: w.name })), // First 3 waypoints
+      currentLocationPoint,
+      gpxData: gpxData ? { tracks: gpxData.tracks.length } : null,
+      isRunActive
+    });
+    
+    if (mapRef.current && waypoints.length > 0 && currentLocationPoint && gpxData) {
+      console.log('✅ All conditions met, starting auto-preload in 1 second...');
       // Small delay to ensure map is fully rendered
       const timer = setTimeout(() => {
+        console.log('🚀 Auto-preload timer fired, calling preloadAllWaypointData...');
         preloadAllWaypointData();
       }, 1000);
       
       return () => clearTimeout(timer);
+    } else {
+      console.log('❌ Auto-preload conditions not met yet');
+      if (!mapRef.current) console.log('  - Missing mapRef');
+      if (!waypoints.length) console.log('  - No waypoints');
+      if (!currentLocationPoint) console.log('  - No current location');
+      if (!gpxData) console.log('  - No GPX data');
     }
-  }, [mapRef.current, waypoints.length, currentLocationPoint, gpxData, isRunActive, preloadAllWaypointData]);
+  }, [mapRef.current, waypoints.length, currentLocationPoint, gpxData, preloadAllWaypointData]);
+
+  // Periodic background updates every 5 minutes for modified waypoints only
+  useEffect(() => {
+    if (!waypoints.length || !currentLocationPoint || !gpxData) return;
+    
+    const updateInterval = setInterval(() => {
+      console.log('⏰ Periodic background update check...');
+      startSmartBackgroundUpdates();
+    }, 5 * 60 * 1000); // Every 5 minutes
+    
+    return () => clearInterval(updateInterval);
+  }, [waypoints.length, currentLocationPoint, gpxData, startSmartBackgroundUpdates]);
 
   // Don't render map until client-side and Leaflet is loaded
   if (!isClient || !leafletLoaded) {
@@ -1515,6 +1743,39 @@ const cachedTrackData = useMemo(() => {
             Locația curentă
           </Button>
         )}
+        
+        {/* Debug status display */}
+        {
+          isAdmin && (
+            <Box sx={{ 
+              position: 'absolute', 
+              top: 60, 
+              right: 10, 
+              zIndex: 1000,
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              padding: 1,
+              borderRadius: 1,
+              fontSize: '0.75rem',
+              fontFamily: 'monospace'
+            }}>
+              <div>Waypoint Data: {Object.keys(waypointPopupData).length}/{waypoints.length}</div>
+              <div>Cache: {localStorage.getItem(`waypointData_${currentLocationPoint?.lat}_${currentLocationPoint?.lng}`) ? '✅' : '❌'}</div>
+              <div>Smart Updates: {waypoints.length > 0 ? '🔄' : '⏸️'}</div>
+              {isAdmin && (
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  onClick={() => {
+                    localStorage.removeItem(`waypointData_${currentLocationPoint?.lat}_${currentLocationPoint?.lng}`);
+                    window.location.reload();
+                  }}
+                  sx={{ mt: 1, fontSize: '0.6rem' }}
+                >
+                  🔄 Force Fresh Calc
+                </Button>
+              )}
+            </Box>)
+        }
         
         {/* Test button for simulating location updates */}
         {/* <Button
@@ -2109,10 +2370,10 @@ const cachedTrackData = useMemo(() => {
                  {currentLocationPoint && (
                    <>
                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                       <strong>Distanța de la locația curentă:</strong> {calculateDistanceToWaypoint({ lat: endPoint[0], lng: endPoint[1] }).toFixed(1)} km
+                       <strong>Distanța de la locația curentă: </strong> {calculateDistanceToWaypoint({ lat: endPoint[0], lng: endPoint[1] }).toFixed(1)} km
                      </Typography>
                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                       <strong>Urcarea de la locația curentă:</strong> {calculateElevationGain([currentLocationPoint.lat, currentLocationPoint.lng], endPoint).toFixed(0)} m
+                       <strong>Urcarea de la locația curentă: </strong> {calculateElevationGain([currentLocationPoint.lat, currentLocationPoint.lng], endPoint).toFixed(0)} m
                      </Typography>
                    </>
                  )}
@@ -2135,10 +2396,10 @@ const cachedTrackData = useMemo(() => {
                        return (
                          <>
                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                             <strong>Distanța de la ultimul waypoint ({lastWaypoint.name}):</strong> {distance.toFixed(1)} km
+                             <strong>Distanța de la ultimul waypoint ({lastWaypoint.name}): </strong> {distance.toFixed(1)} km
                            </Typography>
                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
-                             <strong>Urcarea de la ultimul waypoint:</strong> {elevation.toFixed(0)} m
+                             <strong>Urcarea de la ultimul waypoint: </strong> {elevation.toFixed(0)} m
                            </Typography>
                          </>
                        );
@@ -2351,37 +2612,43 @@ const cachedTrackData = useMemo(() => {
                   
                   return (
                     <>
-                      {/* Distance and Elevation from current location - only show if not completed */}
-                      {currentLocationPoint && !isCompleted && (
+                      {/* Distance and Elevation from current location - always show for all waypoints */}
+                      {currentLocationPoint && (
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                            <strong>Distanță de la locația curentă:</strong> 
+                            <strong>Distanță de la locația curentă: </strong> 
                             {waypointPopupData[waypoint.id]?.distanceFromCurrent ? 
                               `${waypointPopupData[waypoint.id].distanceFromCurrent.toFixed(2)} km` : 
-                              popupDataLoading[waypoint.id] ? 'Se încarcă...' : 'N/A'
+                              isWaypointDataLoading(waypoint.id) ? 'Se încarcă...' : 'N/A'
                             }
                           </Typography>
-                          {waypointPopupData[waypoint.id]?.elevationGainFromCurrent > 0 && (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                              <strong>Urcare de la locația curentă:</strong> {waypointPopupData[waypoint.id].elevationGainFromCurrent.toFixed(0)} m
-                            </Typography>
-                          )}
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                            <strong>Urcare de la locația curentă: </strong> 
+                            {waypointPopupData[waypoint.id]?.elevationGainFromCurrent ? 
+                              `${waypointPopupData[waypoint.id].elevationGainFromCurrent.toFixed(0)} m` : 
+                              isWaypointDataLoading(waypoint.id) ? 'Se încarcă...' : 'N/A'
+                            }
+                          </Typography>
                         </Box>
                       )}
                       
-                      {/* Distance and Elevation from previous waypoint or start */}
-                      {waypointPopupData[waypoint.id]?.distanceFromPrevious > 0 && (
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                            <strong>Distanță de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1]?.name || 'anterior'}`}:</strong> {waypointPopupData[waypoint.id].distanceFromPrevious.toFixed(2)} km
-                          </Typography>
-                          {waypointPopupData[waypoint.id]?.elevationGainFromPrevious > 0 && (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                              <strong>Urcare de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1]?.name || 'anterior'}`}:</strong> {waypointPopupData[waypoint.id].elevationGainFromPrevious.toFixed(0)} m
-                            </Typography>
-                          )}
-                        </Box>
-                      )}
+                      {/* Distance and Elevation from previous waypoint or start - always show for all waypoints */}
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                          <strong>Distanță de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1]?.name || 'anterior'}`}: </strong> 
+                          {waypointPopupData[waypoint.id]?.distanceFromPrevious ? 
+                            `${waypointPopupData[waypoint.id].distanceFromPrevious.toFixed(2)} km` : 
+                            isWaypointDataLoading(waypoint.id) ? 'Se încarcă...' : 'N/A'
+                          }
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                          <strong>Urcare de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1]?.name || 'anterior'}`}: </strong> 
+                          {waypointPopupData[waypoint.id]?.elevationGainFromPrevious ? 
+                            `${waypointPopupData[waypoint.id].elevationGainFromPrevious.toFixed(0)} m` : 
+                            isWaypointDataLoading(waypoint.id) ? 'Se încarcă...' : 'N/A'
+                          }
+                        </Typography>
+                      </Box>
                       
                       {/* Show if waypoint has been passed */}
                       {/* {isCompleted && (
