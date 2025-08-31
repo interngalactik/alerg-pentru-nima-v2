@@ -1407,9 +1407,9 @@ const cachedTrackData = useMemo(() => {
       const cachedData = localStorage.getItem(cacheKey);
       const currentData = cachedData ? JSON.parse(cachedData) : {};
       
-      // Check if cache is still valid (within 10 minutes)
+      // Check if cache is still valid (within 10 minutes - matches server update frequency)
       const cacheTimestamp = currentData._cacheTimestamp || 0;
-      const isCacheValid = (Date.now() - cacheTimestamp) < (10 * 60 * 1000); // 10 minutes
+      const isCacheValid = (Date.now() - cacheTimestamp) < (10 * 60 * 1000); // 10 minutes - matches server
       
       if (!isCacheValid) {
         console.log('⏰ Cache expired, all waypoints need updates');
@@ -1520,9 +1520,9 @@ const cachedTrackData = useMemo(() => {
         try {
           const parsedData = JSON.parse(cachedData);
           
-          // Check if cache is still valid (within 10 minutes)
-          const cacheTimestamp = parsedData._cacheTimestamp || 0;
-          const isCacheValid = (Date.now() - cacheTimestamp) < (10 * 60 * 1000); // 10 minutes
+                // Check if cache is still valid (within 10 minutes - matches server update frequency)
+      const cacheTimestamp = parsedData._cacheTimestamp || 0;
+      const isCacheValid = (Date.now() - cacheTimestamp) < (10 * 60 * 1000); // 10 minutes - matches server
           
           if (isCacheValid) {
             console.log('📦 Using cached waypoint data:', Object.keys(parsedData).length, 'waypoints');
@@ -1594,12 +1594,12 @@ const cachedTrackData = useMemo(() => {
           }
         }
         
-        // Cache the final result for 10 minutes
+        // Cache the final result for 10 minutes (matches server update frequency)
         try {
           // Add cache timestamp
           allWaypointData._cacheTimestamp = Date.now();
           localStorage.setItem(cacheKey, JSON.stringify(allWaypointData));
-          console.log('💾 Cached waypoint data for 10 minutes');
+          console.log('💾 Cached waypoint data for 10 minutes (matches server)');
         } catch (error) {
           console.warn('⚠️ Failed to cache waypoint data:', error);
         }
@@ -1657,14 +1657,14 @@ const cachedTrackData = useMemo(() => {
     }
   }, [mapRef.current, waypoints.length, currentLocationPoint, gpxData, preloadAllWaypointData]);
 
-  // Periodic background updates every 5 minutes for modified waypoints only
+  // Periodic background updates every 5 minutes (slightly more frequent than server)
   useEffect(() => {
     if (!waypoints.length || !currentLocationPoint || !gpxData) return;
     
     const updateInterval = setInterval(() => {
       console.log('⏰ Periodic background update check...');
       startSmartBackgroundUpdates();
-    }, 5 * 60 * 1000); // Every 5 minutes
+    }, 5 * 60 * 1000); // Every 5 minutes - more frequent than server
     
     return () => clearInterval(updateInterval);
   }, [waypoints.length, currentLocationPoint, gpxData, startSmartBackgroundUpdates]);
@@ -1758,22 +1758,10 @@ const cachedTrackData = useMemo(() => {
               fontSize: '0.75rem',
               fontFamily: 'monospace'
             }}>
-              <div>Waypoint Data: {Object.keys(waypointPopupData).length}/{waypoints.length}</div>
-              <div>Cache: {localStorage.getItem(`waypointData_${currentLocationPoint?.lat}_${currentLocationPoint?.lng}`) ? '✅' : '❌'}</div>
-              <div>Smart Updates: {waypoints.length > 0 ? '🔄' : '⏸️'}</div>
-              {isAdmin && (
-                <Button 
-                  size="small" 
-                  variant="outlined" 
-                  onClick={() => {
-                    localStorage.removeItem(`waypointData_${currentLocationPoint?.lat}_${currentLocationPoint?.lng}`);
-                    window.location.reload();
-                  }}
-                  sx={{ mt: 1, fontSize: '0.6rem' }}
-                >
-                  🔄 Force Fresh Calc
-                </Button>
-              )}
+                        <div>Waypoint Data: {Object.keys(waypointPopupData).length}/{waypoints.length}</div>
+          <div>Cache: {localStorage.getItem(`waypointData_${currentLocationPoint?.lat}_${currentLocationPoint?.lng}`) ? '✅' : '❌'}</div>
+          <div>Smart Updates: {waypoints.length > 0 ? '🔄' : '⏸️'}</div>
+          <div>Auto-refresh: Every 5 min (server: 10 min)</div>
             </Box>)
         }
         
