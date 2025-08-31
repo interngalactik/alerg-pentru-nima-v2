@@ -78,7 +78,7 @@ export interface PrecalculatedData {
 export class PerformanceService {
   private static instance: PerformanceService;
   private cache: Map<string, any> = new Map();
-  private cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  private cacheTimeout = 15 * 60 * 1000; // Increased from 5 minutes to 15 minutes for better performance
 
   private constructor() {}
 

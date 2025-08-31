@@ -1003,17 +1003,17 @@ const cachedTrackData = useMemo(() => {
 
       const lastProgress = lastProgressUpdateRef.current;
       if (lastProgress && 
-          lastProgress.completedDistance === currentProgress.completedDistance &&
-          lastProgress.totalDistance === currentProgress.totalDistance &&
-          lastProgress.progressPercentage === currentProgress.progressPercentage) {
-        return; // No change, don't update
+          Math.abs(lastProgress.completedDistance - currentProgress.completedDistance) < 0.1 && // Allow 100 meter precision differences
+          Math.abs(lastProgress.totalDistance - currentProgress.totalDistance) < 0.01 &&
+          Math.abs(lastProgress.progressPercentage - currentProgress.progressPercentage) < 0.1) {
+        return; // No significant change, don't update
       }
 
       // Debounce progress updates to prevent rapid successive calls
       const timeoutId = setTimeout(() => {
         onProgressUpdate(currentProgress);
         lastProgressUpdateRef.current = currentProgress;
-      }, 100); // 100ms debounce
+      }, 2000); // Increased debounce to 2 seconds for maximum performance
 
       return () => clearTimeout(timeoutId);
     }
@@ -1081,7 +1081,7 @@ const cachedTrackData = useMemo(() => {
     loadStartFinishDates();
     
     // Set up interval to check admin status periodically
-    const interval = setInterval(checkAdminStatus, 30000); // Check every 30 seconds
+    const interval = setInterval(checkAdminStatus, 3600000); // Changed to every hour (3600 seconds) for better performance
 
     return () => {
       clearInterval(interval);
@@ -1097,7 +1097,7 @@ const cachedTrackData = useMemo(() => {
     }
   }, [startDate, startTime, finishDate, finishTime, isAdmin]);
 
-  // Track current location from Garmin InReach
+  // Track current location from Garmin InReach - Optimized for performance
   useEffect(() => {
     const loadInitialLocation = async () => {
       try {
@@ -1111,16 +1111,33 @@ const cachedTrackData = useMemo(() => {
     // Load initial location
     loadInitialLocation();
 
-    // Subscribe to real-time location updates
+    // Subscribe to real-time location updates with debouncing
+    let locationUpdateTimeout: NodeJS.Timeout;
     const unsubscribe = locationService.onLatestLocationUpdate((latestLocation) => {
-      // console.log('Current location updated:', latestLocation);
-      if (latestLocation) {
-        // console.log('Setting current location point:', latestLocation.lat, latestLocation.lng);
-      }
-      setCurrentLocationPoint(latestLocation);
+      // Debounce location updates to prevent rapid successive re-renders
+      clearTimeout(locationUpdateTimeout);
+      locationUpdateTimeout = setTimeout(() => {
+        if (latestLocation) {
+          // Only update if location has actually changed significantly (more than 10 meters)
+          setCurrentLocationPoint(prevLocation => {
+            if (!prevLocation) return latestLocation;
+            
+            const distance = calculateDistance(
+              [prevLocation.lat, prevLocation.lng],
+              [latestLocation.lat, latestLocation.lng]
+            );
+            
+            // Only update if location changed by more than 100 meters (0.1km)
+            return distance > 0.1 ? latestLocation : prevLocation;
+          });
+        }
+      }, 500); // 500ms debounce for location updates
     });
 
-    return unsubscribe;
+    return () => {
+      clearTimeout(locationUpdateTimeout);
+      unsubscribe();
+    };
   }, []);
 
   // Waypoint management functions

@@ -150,8 +150,8 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     
     checkAdminStatus();
     
-    // Set up interval to check admin status periodically
-    const interval = setInterval(checkAdminStatus, 30000); // Check every 30 seconds
+    // Set up interval to check admin status periodically - reduced to every hour for maximum performance
+    const interval = setInterval(checkAdminStatus, 3600000); // Changed to every hour (3600 seconds)
 
     return () => {
       clearInterval(interval);

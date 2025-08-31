@@ -307,8 +307,8 @@ const ViaTransilvanicaPage = () => {
 
     window.addEventListener('storage', handleStorageChange);
 
-    // Refresh Strava data every 15 minutes to keep it current
-    const intervalId = setInterval(fetchStravaData, 15 * 60 * 1000); // 15 minutes
+    // Refresh Strava data every 30 minutes to keep it current (increased from 15 minutes for better performance)
+    const intervalId = setInterval(fetchStravaData, 30 * 60 * 1000); // 30 minutes
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);

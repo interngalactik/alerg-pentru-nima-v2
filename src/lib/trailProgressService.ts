@@ -47,7 +47,7 @@ export interface GPXData {
 // Cache for GPX data to avoid reloading on every request
 let gpxDataCache: GPXData | null = null;
 let gpxCacheTimestamp = 0;
-const GPX_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const GPX_CACHE_DURATION = 15 * 60 * 1000; // Increased from 5 minutes to 15 minutes for better performance
 
 /**
  * Load and cache GPX data from the predefined file
