@@ -135,6 +135,10 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   const [precalculatedData, setPrecalculatedData] = useState<any>(null);
   const [isLoadingPrecalculatedData, setIsLoadingPrecalculatedData] = useState(false);
 
+  // State for pre-calculated waypoint data
+  const [waypointPopupData, setWaypointPopupData] = useState<Record<string, any>>({});
+  const [popupDataLoading, setPopupDataLoading] = useState<Record<string, boolean>>({});
+
   // Clear cache when GPX data changes
   useEffect(() => {
     calculationCache.current.clear();
@@ -318,6 +322,14 @@ const cachedTrackData = useMemo(() => {
         // Only auto-hide overlay on phones (≤600px)
         if (window.innerWidth <= 600) {
           setShowProgressOverlay(false);
+        }
+        
+        // Load pre-calculated waypoint data for instant display
+        if (e.popup && e.popup._contentNode) {
+          const waypointId = e.popup._contentNode.getAttribute('data-waypoint-id');
+          if (waypointId && !waypointPopupData[waypointId] && !popupDataLoading[waypointId]) {
+            getWaypointPopupData(waypointId);
+          }
         }
         
         // Popup opened - handle overlay visibility (phone only)
@@ -1341,6 +1353,36 @@ const cachedTrackData = useMemo(() => {
     }
   };
 
+  // Function to get pre-calculated waypoint data for instant popup display
+  const getWaypointPopupData = useCallback(async (waypointId: string) => {
+    // If we already have the data, return it immediately
+    if (waypointPopupData[waypointId]) {
+      return waypointPopupData[waypointId];
+    }
+
+    // If we're already loading this waypoint, don't load again
+    if (popupDataLoading[waypointId]) {
+      return null;
+    }
+
+    try {
+      setPopupDataLoading(prev => ({ ...prev, [waypointId]: true }));
+      
+      const { performanceService } = await import('@/lib/performanceService');
+      const data = await performanceService.getPrecalculatedWaypointData(waypointId);
+      
+      // Cache the data
+      setWaypointPopupData(prev => ({ ...prev, [waypointId]: data }));
+      
+      return data;
+    } catch (error) {
+      console.error('Error getting waypoint popup data:', error);
+      return null;
+    } finally {
+      setPopupDataLoading(prev => ({ ...prev, [waypointId]: false }));
+    }
+  }, [waypointPopupData, popupDataLoading]);
+
   // Don't render map until client-side and Leaflet is loaded
   if (!isClient || !leafletLoaded) {
     return (
@@ -2154,11 +2196,14 @@ const cachedTrackData = useMemo(() => {
             })}
         >
           <Popup>
-              <Box sx={{ 
-                minWidth: { xs: 150, sm: 180, md: 200 }, // Responsive width
-                maxWidth: { xs: '90vw', sm: '300px', md: '400px' }, // Prevent overflow on mobile
-                fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } // Responsive font size
-              }}>
+              <Box 
+                data-waypoint-id={waypoint.id}
+                sx={{ 
+                  minWidth: { xs: 150, sm: 180, md: 200 }, // Responsive width
+                  maxWidth: { xs: '90vw', sm: '300px', md: '400px' }, // Prevent overflow on mobile
+                  fontSize: { xs: '0.75rem', sm: '0.875rem', md: '1rem' } // Responsive font size
+                }}
+              >
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
                   {waypoint.name}
             </Typography>
@@ -2242,9 +2287,8 @@ const cachedTrackData = useMemo(() => {
                   </Box>
                 </Box>
 
-                {/* Distance Information */}
+                {/* Distance Information - Using Pre-calculated Data for Instant Display */}
                 {(() => {
-                  const distanceInfo = calculateDistanceFromLastWaypoint(index);
                   const isCompleted = isWaypointCompleted(waypoint);
                   
                   return (
@@ -2253,41 +2297,31 @@ const cachedTrackData = useMemo(() => {
                       {currentLocationPoint && !isCompleted && (
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                            <strong>Distanță de la locația curentă:</strong> {calculateDistanceToWaypoint(waypoint.coordinates).toFixed(2)} km
+                            <strong>Distanță de la locația curentă:</strong> 
+                            {waypointPopupData[waypoint.id]?.distanceFromCurrent ? 
+                              `${waypointPopupData[waypoint.id].distanceFromCurrent.toFixed(2)} km` : 
+                              popupDataLoading[waypoint.id] ? 'Se încarcă...' : 'N/A'
+                            }
                           </Typography>
-                          {(() => {
-                            const elevationGainFromCurrent = calculateElevationGainFromCurrentLocation(waypoint.coordinates);
-                            return elevationGainFromCurrent > 0 ? (
-                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                                <strong>Urcare de la locația curentă:</strong> {elevationGainFromCurrent.toFixed(0)} m
-                              </Typography>
-                            ) : null;
-                          })()}
+                          {waypointPopupData[waypoint.id]?.elevationGainFromCurrent > 0 && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                              <strong>Urcare de la locația curentă:</strong> {waypointPopupData[waypoint.id].elevationGainFromCurrent.toFixed(0)} m
+                            </Typography>
+                          )}
                         </Box>
                       )}
                       
                       {/* Distance and Elevation from previous waypoint or start */}
-                      {distanceInfo.distance > 0 && (
+                      {waypointPopupData[waypoint.id]?.distanceFromPrevious > 0 && (
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                            <strong>Distanță de la {distanceInfo.fromName === 'Start' ? 'start' : `punctul ${distanceInfo.fromName}`}:</strong> {distanceInfo.distance.toFixed(2)} km
+                            <strong>Distanță de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1]?.name || 'anterior'}`}:</strong> {waypointPopupData[waypoint.id].distanceFromPrevious.toFixed(2)} km
                           </Typography>
-                          {(() => {
-                            const elevationGainFromPrevious = index > 0 
-                              ? calculateElevationGain(
-                                  [sortedWaypoints[index - 1].coordinates.lat, sortedWaypoints[index - 1].coordinates.lng],
-                                  [waypoint.coordinates.lat, waypoint.coordinates.lng]
-                                )
-                              : calculateElevationGain(
-                                  [gpxData?.tracks[0]?.points[0]?.[0] || 0, gpxData?.tracks[0]?.points[0]?.[1] || 0],
-                                  [waypoint.coordinates.lat, waypoint.coordinates.lng]
-                                );
-                            return elevationGainFromPrevious > 0 ? (
-                              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
-                                <strong>Urcare de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1].name}`}:</strong> {elevationGainFromPrevious.toFixed(0)} m
-                              </Typography>
-                            ) : null;
-                          })()}
+                          {waypointPopupData[waypoint.id]?.elevationGainFromPrevious > 0 && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
+                              <strong>Urcare de la {index === 0 ? 'start' : `punctul ${sortedWaypoints[index - 1]?.name || 'anterior'}`}:</strong> {waypointPopupData[waypoint.id].elevationGainFromPrevious.toFixed(0)} m
+                            </Typography>
+                          )}
                         </Box>
                       )}
                       

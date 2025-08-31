@@ -310,6 +310,234 @@ export const precalculateWaypointDistances = onCall(async (request) => {
   }
 });
 
+
+
+// Function to get pre-calculated waypoint data for instant popup display
+export const getPrecalculatedWaypointData = onCall(async (request) => {
+  try {
+    const { waypointId } = request.data;
+    
+    if (!waypointId) {
+      throw new Error('Missing waypointId');
+    }
+
+    const db = admin.database();
+    const waypointDataRef = db.ref(`precalculated/waypointData/${waypointId}`);
+    
+    const snapshot = await waypointDataRef.once('value');
+    
+    if (snapshot.exists()) {
+      return { 
+        success: true, 
+        data: snapshot.val(),
+        message: 'Waypoint data retrieved successfully'
+      };
+    } else {
+      return { 
+        success: false, 
+        error: 'No pre-calculated data found for this waypoint'
+      };
+    }
+
+  } catch (error) {
+    console.error('Error getting pre-calculated waypoint data:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
+// Function to pre-calculate all waypoint data for instant popup display
+export const precalculateAllWaypointData = onCall(async (request) => {
+  try {
+    const { currentLocation, waypoints, gpxData } = request.data;
+    
+    if (!currentLocation || !waypoints || !gpxData || !gpxData.tracks || gpxData.tracks.length === 0) {
+      throw new Error('Missing required data: currentLocation, waypoints, or gpxData');
+    }
+
+    const track = gpxData.tracks[0];
+    const points = track.points;
+    const elevation = track.elevation || [];
+    
+    if (points.length === 0) {
+      throw new Error('No track points available');
+    }
+
+    const db = admin.database();
+    const waypointDataRef = db.ref('precalculated/waypointData');
+    
+    // Calculate data for each waypoint
+    const waypointCalculations: Record<string, any> = {};
+    
+    for (const waypoint of waypoints) {
+      const waypointCoords = [waypoint.coordinates.lat, waypoint.coordinates.lng];
+      
+      // Find closest point on track to waypoint
+      let waypointTrackIndex = 0;
+      let waypointMinDistance = Infinity;
+      
+      for (let i = 0; i < points.length; i++) {
+        const distance = calculateDistance(waypointCoords as [number, number], points[i]);
+        if (distance < waypointMinDistance) {
+          waypointMinDistance = distance;
+          waypointTrackIndex = i;
+        }
+      }
+      
+      // Calculate distance from current location to waypoint along track
+      let distanceFromCurrent = 0;
+      let elevationGainFromCurrent = 0;
+      
+      if (currentLocation) {
+        // Find closest point on track to current location
+        let currentTrackIndex = 0;
+        let currentMinDistance = Infinity;
+        
+        for (let i = 0; i < points.length; i++) {
+          const distance = calculateDistance([currentLocation.lat, currentLocation.lng], points[i]);
+          if (distance < currentMinDistance) {
+            currentMinDistance = distance;
+            currentTrackIndex = i;
+          }
+        }
+        
+        // Calculate distance along track from current location to waypoint
+        if (currentTrackIndex < waypointTrackIndex) {
+          for (let i = currentTrackIndex; i < waypointTrackIndex; i++) {
+            if (i + 1 < points.length) {
+              const lat1 = points[i][0] * Math.PI / 180;
+              const lat2 = points[i + 1][0] * Math.PI / 180;
+              const dLat = (points[i + 1][0] - points[i][0]) * Math.PI / 180;
+              const dLon = (points[i + 1][1] - points[i][1]) * Math.PI / 180;
+              
+              const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              distanceFromCurrent += 6371 * c;
+            }
+          }
+        } else if (currentTrackIndex > waypointTrackIndex) {
+          for (let i = waypointTrackIndex; i < currentTrackIndex; i++) {
+            if (i + 1 < points.length) {
+              const lat1 = points[i][0] * Math.PI / 180;
+              const lat2 = points[i + 1][0] * Math.PI / 180;
+              const dLat = (points[i + 1][0] - points[i][0]) * Math.PI / 180;
+              const dLon = (points[i + 1][1] - points[i][1]) * Math.PI / 180;
+              
+              const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              distanceFromCurrent += 6371 * c;
+            }
+          }
+        }
+        
+        // Calculate elevation gain from current location to waypoint
+        if (elevation.length > 0 && currentTrackIndex < waypointTrackIndex) {
+          for (let i = currentTrackIndex + 1; i <= waypointTrackIndex; i++) {
+            if (i < elevation.length && i - 1 < elevation.length) {
+              const currentElev = elevation[i];
+              const prevElev = elevation[i - 1];
+              
+              if (typeof currentElev === 'number' && typeof prevElev === 'number' && 
+                  !isNaN(currentElev) && !isNaN(prevElev)) {
+                const elevationDiff = currentElev - prevElev;
+                if (elevationDiff > 0) {
+                  elevationGainFromCurrent += elevationDiff;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Calculate distance from previous waypoint (if not first)
+      let distanceFromPrevious = 0;
+      let elevationGainFromPrevious = 0;
+      
+      if (waypoints.indexOf(waypoint) > 0) {
+        const previousWaypoint = waypoints[waypoints.indexOf(waypoint) - 1];
+        const prevCoords = [previousWaypoint.coordinates.lat, previousWaypoint.coordinates.lng];
+        
+        // Find closest point on track to previous waypoint
+        let prevTrackIndex = 0;
+        let prevMinDistance = Infinity;
+        
+        for (let i = 0; i < points.length; i++) {
+          const distance = calculateDistance(prevCoords as [number, number], points[i]);
+          if (distance < prevMinDistance) {
+            prevMinDistance = distance;
+            prevTrackIndex = i;
+          }
+        }
+        
+        // Calculate distance along track from previous waypoint to current waypoint
+        if (prevTrackIndex < waypointTrackIndex) {
+          for (let i = prevTrackIndex; i < waypointTrackIndex; i++) {
+            if (i + 1 < points.length) {
+              const lat1 = points[i][0] * Math.PI / 180;
+              const lat2 = points[i + 1][0] * Math.PI / 180;
+              const dLat = (points[i + 1][0] - points[i][0]) * Math.PI / 180;
+              const dLon = (points[i + 1][1] - points[i][1]) * Math.PI / 180;
+              
+              const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+              distanceFromPrevious += 6371 * c;
+            }
+          }
+        }
+        
+        // Calculate elevation gain from previous waypoint to current waypoint
+        if (elevation.length > 0 && prevTrackIndex < waypointTrackIndex) {
+          for (let i = prevTrackIndex + 1; i <= waypointTrackIndex; i++) {
+            if (i < elevation.length && i - 1 < elevation.length) {
+              const currentElev = elevation[i];
+              const prevElev = elevation[i - 1];
+              
+              if (typeof currentElev === 'number' && typeof prevElev === 'number' && 
+                  !isNaN(currentElev) && !isNaN(prevElev)) {
+                const elevationDiff = currentElev - prevElev;
+                if (elevationDiff > 0) {
+                  elevationGainFromPrevious += elevationDiff;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Store calculated data for this waypoint
+      waypointCalculations[waypoint.id] = {
+        distanceFromCurrent: Math.round(distanceFromCurrent * 100) / 100,
+        elevationGainFromCurrent: Math.round(elevationGainFromCurrent),
+        distanceFromPrevious: Math.round(distanceFromPrevious * 100) / 100,
+        elevationGainFromPrevious: Math.round(elevationGainFromPrevious),
+        trackIndex: waypointTrackIndex,
+        calculatedAt: Date.now()
+      };
+    }
+    
+    // Store all waypoint data in database
+    await waypointDataRef.set(waypointCalculations);
+    
+    return { 
+      success: true, 
+      data: waypointCalculations,
+      message: `Pre-calculated data for ${waypoints.length} waypoints successfully`
+    };
+
+  } catch (error) {
+    console.error('Error pre-calculating waypoint data:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+});
+
 // Enhanced function to calculate current location to waypoint data for popups
 export const calculatePopupData = onCall(async (request) => {
   try {

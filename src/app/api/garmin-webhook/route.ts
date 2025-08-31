@@ -36,6 +36,29 @@ export async function POST(request: NextRequest) {
     const { calculateTrailProgress } = await import('@/lib/trailProgressService');
     const trailProgress = await calculateTrailProgress(locationPoint);
 
+    // Pre-calculate all waypoint data for instant popup display
+    try {
+      const { performanceService } = await import('@/lib/performanceService');
+      const { parseGPX } = await import('@/lib/gpxParser');
+      const { WaypointService } = await import('@/lib/waypointService');
+      
+      // Load GPX data and waypoints for pre-calculation
+      const gpxResponse = await fetch(`${request.nextUrl.origin}/gpx/Via-Transilvanica-Traseu.gpx`);
+      if (gpxResponse.ok) {
+        const gpxContent = await gpxResponse.text();
+        const gpxData = parseGPX(gpxContent);
+        const waypoints = await WaypointService.getAllWaypoints();
+        
+        // Trigger waypoint pre-calculation in background (don't wait for completion)
+        performanceService.precalculateAllWaypointData(locationPoint, waypoints, gpxData)
+          .then(() => console.log('✅ Waypoint data pre-calculated successfully'))
+          .catch(error => console.error('⚠️ Waypoint pre-calculation failed:', error));
+      }
+    } catch (error) {
+      console.error('⚠️ Error triggering waypoint pre-calculation:', error);
+      // Don't fail the webhook if pre-calculation fails
+    }
+
     // Store the updated progress with limited segments for performance
     console.log('Attempting to store trail progress in Firebase...');
     

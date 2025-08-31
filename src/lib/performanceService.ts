@@ -17,6 +17,8 @@ const calculatePopupData = httpsCallable(functions, 'calculatePopupData');
 const calculateProgress = httpsCallable(functions, 'calculateProgress');
 const calculateWaypointDistances = httpsCallable(functions, 'calculateWaypointDistances');
 const calculateCurrentLocationDistances = httpsCallable(functions, 'calculateCurrentLocationDistances');
+const precalculateAllWaypointData = httpsCallable(functions, 'precalculateAllWaypointData');
+const getPrecalculatedWaypointData = httpsCallable(functions, 'getPrecalculatedWaypointData');
 
 export interface PrecalculatedTrackData {
   totalDistance: number;
@@ -203,13 +205,51 @@ export class PerformanceService {
           data: data.data,
           timestamp: Date.now()
         });
-        
         return data.data;
       } else {
         throw new Error(data.error || 'Failed to calculate waypoint distances');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error calculating waypoint distances:', error);
+      throw error;
+    }
+  }
+
+  // Pre-calculate all waypoint data for instant popup display (NEW)
+  async precalculateAllWaypointData(currentLocation: any, waypoints: any[], gpxData: any): Promise<any> {
+    try {
+      const result = await precalculateAllWaypointData({ currentLocation, waypoints, gpxData });
+      const data = result.data as any;
+      
+      if (data.success) {
+        // Cache the result locally
+        this.cache.set('allWaypointData', {
+          data: data.data,
+          timestamp: Date.now()
+        });
+        return data.data;
+      } else {
+        throw new Error(data.error || 'Failed to pre-calculate waypoint data');
+      }
+    } catch (error) {
+      console.error('Error pre-calculating waypoint data:', error);
+      throw error;
+    }
+  }
+
+  // Get pre-calculated waypoint data for instant popup display (NEW)
+  async getPrecalculatedWaypointData(waypointId: string): Promise<any> {
+    try {
+      const result = await getPrecalculatedWaypointData({ waypointId });
+      const data = result.data as any;
+      
+      if (data.success) {
+        return data.data;
+      } else {
+        throw new Error(data.error || 'Failed to get pre-calculated waypoint data');
+      }
+    } catch (error) {
+      console.error('Error getting pre-calculated waypoint data:', error);
       throw error;
     }
   }
