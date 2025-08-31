@@ -318,30 +318,35 @@ const cachedTrackData = useMemo(() => {
       const map = mapRef.current;
       
       const handlePopupOpen = (e: any) => {
-        setIsPopupOpen(true);
-        // Only auto-hide overlay on phones (≤600px)
-        if (window.innerWidth <= 600) {
-          setShowProgressOverlay(false);
-        }
-        
-        // Load pre-calculated waypoint data for instant display
-        if (e.popup && e.popup._contentNode) {
-          const waypointId = e.popup._contentNode.getAttribute('data-waypoint-id');
-          if (waypointId && !waypointPopupData[waypointId] && !popupDataLoading[waypointId]) {
-            getWaypointPopupData(waypointId);
+        // Use requestAnimationFrame for better performance
+        requestAnimationFrame(() => {
+          setIsPopupOpen(true);
+          
+          // Only auto-hide overlay on phones (≤600px)
+          if (window.innerWidth <= 600) {
+            setShowProgressOverlay(false);
           }
-        }
-        
-        // Popup opened - handle overlay visibility (phone only)
-        // Let Leaflet handle popup positioning naturally
+          
+          // Load pre-calculated waypoint data for instant display
+          if (e.popup && e.popup._contentNode) {
+            const waypointId = e.popup._contentNode.getAttribute('data-waypoint-id');
+            if (waypointId && !waypointPopupData[waypointId] && !popupDataLoading[waypointId]) {
+              getWaypointPopupData(waypointId);
+            }
+          }
+        });
       };
       
       const handlePopupClose = () => {
-        setIsPopupOpen(false);
-        // Only auto-show overlay on phones (≤600px)
-        if (window.innerWidth <= 600) {
-          setShowProgressOverlay(true);
-        }
+        // Use requestAnimationFrame for better performance
+        requestAnimationFrame(() => {
+          setIsPopupOpen(false);
+          
+          // Only auto-show overlay on phones (≤600px)
+          if (window.innerWidth <= 600) {
+            setShowProgressOverlay(true);
+          }
+        });
       };
       
       // Listen for popup open/close events
@@ -1382,6 +1387,59 @@ const cachedTrackData = useMemo(() => {
       setPopupDataLoading(prev => ({ ...prev, [waypointId]: false }));
     }
   }, [waypointPopupData, popupDataLoading]);
+
+  // Pre-load all waypoint data for instant popup display
+  const preloadAllWaypointData = useCallback(async () => {
+    if (!waypoints.length || !currentLocationPoint || !gpxData) return;
+    
+    try {
+      console.log('🔄 Pre-loading waypoint data for instant popups...');
+      
+      const { performanceService } = await import('@/lib/performanceService');
+      
+      // Trigger server-side pre-calculation
+      const result = await performanceService.precalculateAllWaypointData(
+        currentLocationPoint, 
+        waypoints, 
+        gpxData
+      );
+      
+      if (result) {
+        console.log('✅ Waypoint data pre-calculated successfully');
+        
+        // Load the pre-calculated data for all waypoints
+        const allWaypointData: Record<string, any> = {};
+        
+        for (const waypoint of waypoints) {
+          try {
+            const data = await performanceService.getPrecalculatedWaypointData(waypoint.id);
+            if (data) {
+              allWaypointData[waypoint.id] = data;
+            }
+          } catch (error) {
+            console.warn(`⚠️ Could not load data for waypoint ${waypoint.id}:`, error);
+          }
+        }
+        
+        setWaypointPopupData(allWaypointData);
+        console.log(`✅ Loaded data for ${Object.keys(allWaypointData).length} waypoints`);
+      }
+    } catch (error) {
+      console.error('❌ Error pre-loading waypoint data:', error);
+    }
+  }, [waypoints, currentLocationPoint, gpxData]);
+
+  // Pre-load waypoint data when map is ready and has all necessary data
+  useEffect(() => {
+    if (mapRef.current && waypoints.length > 0 && currentLocationPoint && gpxData && isRunActive) {
+      // Small delay to ensure map is fully rendered
+      const timer = setTimeout(() => {
+        preloadAllWaypointData();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [mapRef.current, waypoints.length, currentLocationPoint, gpxData, isRunActive, preloadAllWaypointData]);
 
   // Don't render map until client-side and Leaflet is loaded
   if (!isClient || !leafletLoaded) {
@@ -2890,6 +2948,47 @@ const cachedTrackData = useMemo(() => {
                 }}
             >
                 Recalculate on Server
+            </Button>
+            
+            <Button
+                variant="outlined"
+                color="success"
+                size="small"
+                onClick={loadPrecalculatedData}
+                disabled={isLoadingPrecalculatedData}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#4caf50',
+                  color: '#4caf50',
+                  '&:hover': {
+                    borderColor: '#388e3c',
+                    backgroundColor: 'rgba(76, 175, 80, 0.04)'
+                  }
+                }}
+            >
+                Load Server Data
+            </Button>
+            
+            {/* Pre-calculate waypoint data for instant popups */}
+            <Button
+                variant="outlined"
+                color="warning"
+                size="small"
+                onClick={preloadAllWaypointData}
+                disabled={!currentLocationPoint || !waypoints.length || !gpxData}
+                sx={{ 
+                  fontSize: '0.75rem', 
+                  ml: 1,
+                  borderColor: '#ff9800',
+                  color: '#ff9800',
+                  '&:hover': {
+                    borderColor: '#f57c00',
+                    backgroundColor: 'rgba(255, 152, 0, 0.04)'
+                  }
+                }}
+            >
+                Pre-calculate Waypoints
             </Button>
             
             <Button
