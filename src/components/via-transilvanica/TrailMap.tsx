@@ -2600,8 +2600,9 @@ const cachedTrackData = useMemo(() => {
                   
                   return (
                     <>
-                      {/* Distance and Elevation from current location - always show for all waypoints */}
-                      {currentLocationPoint && (
+                      {/* Distance and Elevation from current location - only show for non-completed waypoints */}
+                      {/* Optimization: Skip calculations for completed waypoints since they won't change */}
+                      {currentLocationPoint && !isCompleted && (
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5, fontStyle: 'italic' }}>
                             <strong>Distanță de la locația curentă: </strong> 
@@ -2619,6 +2620,8 @@ const cachedTrackData = useMemo(() => {
                           </Typography>
                         </Box>
                       )}
+                      
+                      {/* Show completion status for completed waypoints */}
                       
                       {/* Distance and Elevation from previous waypoint or start - always show for all waypoints */}
                       <Box sx={{ mb: 2 }}>

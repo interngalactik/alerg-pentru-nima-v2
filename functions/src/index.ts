@@ -29,6 +29,7 @@ interface Waypoint {
   coordinates: { lat: number; lng: number };
   name: string;
   type: string;
+  isCompleted?: boolean;
 }
 
 // Interface for current location
@@ -415,10 +416,12 @@ export const precalculateAllWaypointData = onCall(async (request) => {
       }
       
       // Calculate distance from current location to waypoint along track
+      // OPTIMIZATION: Skip calculation for completed waypoints to save server resources
+      // Since completed waypoints won't change, we don't need to recalculate distances
       let distanceFromCurrent = 0;
       let elevationGainFromCurrent = 0;
       
-      if (currentLocation) {
+      if (currentLocation && !waypoint.isCompleted) {
         // Find closest point on track to current location
         let currentTrackIndex = 0;
         let currentMinDistance = Infinity;
@@ -479,6 +482,10 @@ export const precalculateAllWaypointData = onCall(async (request) => {
             }
           }
         }
+      } else if (waypoint.isCompleted) {
+        // For completed waypoints, set to 0 since they won't change
+        distanceFromCurrent = 0;
+        elevationGainFromCurrent = 0;
       }
       
       // Calculate distance from previous waypoint or from track start
@@ -674,26 +681,34 @@ export const calculatePopupData = onCall(async (request) => {
       }
 
       // Calculate distance from current location to waypoint along track
+      // OPTIMIZATION: Skip calculation for completed waypoints to save server resources
+      // Since completed waypoints won't change, we don't need to recalculate distances
       let distanceFromCurrent = 0;
       let elevationGainFromCurrent = 0;
       
-      const startIndex = Math.min(currentLocationIndex, waypointIndex);
-      const endIndex = Math.max(currentLocationIndex, waypointIndex);
-      
-      for (let i = startIndex + 1; i <= endIndex; i++) {
-        const lat1 = points[i - 1][0] * Math.PI / 180;
-        const lat2 = points[i][0] * Math.PI / 180;
-        const dLat = (points[i][0] - points[i - 1][0]) * Math.PI / 180;
-        const dLon = (points[i][1] - points[i - 1][1]) * Math.PI / 180;
+      if (!waypoint.isCompleted) {
+        const startIndex = Math.min(currentLocationIndex, waypointIndex);
+        const endIndex = Math.max(currentLocationIndex, waypointIndex);
         
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        distanceFromCurrent += 6371 * c;
-        
-        if (elevation.length > i && elevation.length > i - 1) {
-          elevationGainFromCurrent += calculateElevationGain(elevation[i - 1], elevation[i]);
+        for (let i = startIndex + 1; i <= endIndex; i++) {
+          const lat1 = points[i - 1][0] * Math.PI / 180;
+          const lat2 = points[i][0] * Math.PI / 180;
+          const dLat = (points[i][0] - points[i - 1][0]) * Math.PI / 180;
+          const dLon = (points[i][1] - points[i - 1][1]) * Math.PI / 180;
+          
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          distanceFromCurrent += 6371 * c;
+          
+          if (elevation.length > i && elevation.length > i - 1) {
+            elevationGainFromCurrent += calculateElevationGain(elevation[i - 1], elevation[i]);
+          }
         }
+      } else {
+        // For completed waypoints, set to 0 since they won't change
+        distanceFromCurrent = 0;
+        elevationGainFromCurrent = 0;
       }
 
       popupData[waypoint.id] = {
@@ -1272,6 +1287,7 @@ export const calculateCurrentLocationDistances = onCall<{
     });
     
     // Calculate distances and elevation gains to all waypoints
+    // Skip calculation for completed waypoints to save resources
     const waypointDistances: Record<string, {
       distanceFromCurrent: number;
       elevationGainFromCurrent: number;
@@ -1297,33 +1313,42 @@ export const calculateCurrentLocationDistances = onCall<{
       });
       
       // Calculate distance along track from current location to waypoint
-      const startIndex = Math.min(currentLocationIndex, waypointIndex);
-      const endIndex = Math.max(currentLocationIndex, waypointIndex);
-      
+      // OPTIMIZATION: Skip calculation for completed waypoints to save server resources
+      // Since completed waypoints won't change, we don't need to recalculate distances
       let trackDistance = 0;
-      for (let i = startIndex; i < endIndex; i++) {
-        if (i + 1 < points.length) {
-          trackDistance += calculateDistance(points[i], points[i + 1]);
-        }
-      }
-      
-      // Calculate elevation gain along track from current location to waypoint
       let elevationGain = 0;
-      if (elevation.length > 0) {
-        for (let i = startIndex + 1; i <= endIndex; i++) {
-          if (i < elevation.length && i - 1 < elevation.length) {
-            const currentElev = elevation[i];
-            const prevElev = elevation[i - 1];
-            
-            if (typeof currentElev === 'number' && typeof prevElev === 'number' && 
-                !isNaN(currentElev) && !isNaN(prevElev)) {
-              const elevationDiff = currentElev - prevElev;
-              if (elevationDiff > 0) {
-                elevationGain += elevationDiff;
+      
+      if (!waypoint.isCompleted) {
+        const startIndex = Math.min(currentLocationIndex, waypointIndex);
+        const endIndex = Math.max(currentLocationIndex, waypointIndex);
+        
+        for (let i = startIndex; i < endIndex; i++) {
+          if (i + 1 < points.length) {
+            trackDistance += calculateDistance(points[i], points[i + 1]);
+          }
+        }
+        
+        // Calculate elevation gain along track from current location to waypoint
+        if (elevation.length > 0) {
+          for (let i = startIndex + 1; i <= endIndex; i++) {
+            if (i < elevation.length && i - 1 < elevation.length) {
+              const currentElev = elevation[i];
+              const prevElev = elevation[i - 1];
+              
+              if (typeof currentElev === 'number' && typeof prevElev === 'number' && 
+                  !isNaN(currentElev) && !isNaN(prevElev)) {
+                const elevationDiff = currentElev - prevElev;
+                if (elevationDiff > 0) {
+                  elevationGain += elevationDiff;
+                }
               }
             }
           }
         }
+      } else {
+        // For completed waypoints, set to 0 since they won't change
+        trackDistance = 0;
+        elevationGain = 0;
       }
       
       waypointDistances[waypoint.id] = {
