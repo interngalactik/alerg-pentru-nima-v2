@@ -9,6 +9,7 @@ export interface LocationPoint {
   timestamp: number;
   accuracy?: number;
   elevation?: number;
+  source?: string;
 }
 
 
@@ -163,7 +164,8 @@ export class LocationService {
       lng,
       timestamp: Date.now(),
       accuracy: 10, // 10 meter accuracy
-      elevation: 0
+      elevation: 0,
+      source: 'manual-test'
     };
 
     await this.addLocation(location);

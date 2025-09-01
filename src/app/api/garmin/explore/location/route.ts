@@ -86,7 +86,19 @@ export async function POST(request: NextRequest) {
           const timestampStr = locationData.timestamp.replace('/Date(', '').replace(')/', '');
           const timestampMs = parseInt(timestampStr);
           if (!isNaN(timestampMs)) {
-            parsedTimestamp = new Date(timestampMs).toISOString();
+            // Check if the timestamp is reasonable (within last 24 hours)
+            const currentTime = Date.now();
+            const timeDiff = Math.abs(currentTime - timestampMs);
+            const oneDayMs = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+            
+            if (timeDiff > oneDayMs) {
+              console.log('⚠️ Garmin timestamp is too old, using current time instead');
+              console.log('Garmin timestamp:', timestampMs, '→', new Date(timestampMs).toISOString());
+              console.log('Current time:', currentTime, '→', new Date(currentTime).toISOString());
+              parsedTimestamp = new Date().toISOString();
+            } else {
+              parsedTimestamp = new Date(timestampMs).toISOString();
+            }
           } else {
             parsedTimestamp = new Date().toISOString();
           }

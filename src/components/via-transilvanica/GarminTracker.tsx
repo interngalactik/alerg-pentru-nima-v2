@@ -354,13 +354,12 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
             lng: result.location.longitude,
             timestamp: new Date(result.location.timestamp).getTime(),
             elevation: result.location.elevation,
-            accuracy: result.location.accuracy
+            accuracy: result.location.accuracy,
+            source: 'garmin-auto'
           });
           
-          // Refresh progress data after adding new location
-          setTimeout(() => {
-            loadData();
-          }, 2000); // Wait 2 seconds for webhook to process
+          // No need to call loadData - the real-time listener will update automatically
+          console.log('✅ Auto-location added, real-time listener will update the display');
         }
       } catch (error) {
         console.error('Error updating location from Garmin:', error);

@@ -8,6 +8,7 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin
@@ -1342,5 +1343,67 @@ export const calculateCurrentLocationDistances = onCall<{
   } catch (error) {
     console.error('Error calculating current location distances:', error);
     throw new HttpsError('internal', 'Failed to calculate current location distances');
+  }
+});
+
+// Auto-update Garmin locations every 10 minutes
+export const autoUpdateGarminLocation = onSchedule('every 10 minutes', async (event: any) => {
+  try {
+    console.log('🤖 Auto-update: Starting scheduled Garmin location update...');
+    
+    // Get your Garmin API credentials from Firebase Functions config
+    const apiKey = process.env.FIREBASE_CONFIG_GARMIN_API_KEY || 'ztrGErtXezisvvTOEcMHWpiE0uOW9WiI-v-q-4KfEfC0gmBFvXmT5A';
+    const baseUrl = process.env.FIREBASE_CONFIG_GARMIN_BASE_URL || 'https://ipcinbound.inreachapp.com/api';
+    const appUrl = process.env.FIREBASE_CONFIG_APP_URL || 'https://alerg-pentru-nima-de7c4.web.app';
+    
+    if (!apiKey) {
+      console.error('❌ Auto-update: GARMIN_API_KEY not configured in environment variables');
+      return;
+    }
+
+    console.log('🔑 Auto-update: Using API key and base URL from Firebase Functions config');
+
+    // Call our working location endpoint
+    const response = await fetch(`${appUrl}/api/garmin/explore/location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'getCurrentLocation',
+        apiKey,
+        baseUrl
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.location) {
+        console.log('✅ Auto-update: Successfully fetched location:', result.location);
+        
+        // Store the location in Firebase database
+        const db = admin.database();
+        const locationsRef = db.ref('locations');
+        const newLocationRef = locationsRef.push();
+        await newLocationRef.set({
+          id: `garmin_auto_${Date.now()}`,
+          lat: result.location.latitude,
+          lng: result.location.longitude,
+          timestamp: new Date(result.location.timestamp).getTime(),
+          accuracy: result.location.accuracy || 100,
+          elevation: result.location.elevation,
+          source: 'garmin-auto-update'
+        });
+        
+        console.log('✅ Auto-update: Location stored in database');
+      } else {
+        console.log('⚠️ Auto-update: No location data received:', result.message);
+      }
+    } else {
+      console.error('❌ Auto-update: Failed to fetch location:', response.status);
+    }
+
+  } catch (error) {
+      console.error('❌ Auto-update: Error in scheduled function:', error);
   }
 });
