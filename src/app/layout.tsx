@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import './globals.css'
 import Script from 'next/script'
 import ScrollToTop from '@/components/ScrollToTop'
@@ -17,9 +18,16 @@ const theme = createTheme({
 
 export default function RootLayout({
   children,
+  params,
 }: {
   children: React.ReactNode
+  params?: Promise<Record<string, string | string[]>>
 }) {
+  // Next.js 15: unwrap params so it isn't enumerated (e.g. by dev overlay) before use
+  if (params != null) {
+    React.use(params)
+  }
+
   return (
     <html lang="ro">
       <head>

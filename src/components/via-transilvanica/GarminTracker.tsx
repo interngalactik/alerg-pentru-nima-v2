@@ -28,6 +28,7 @@ import { AdminAuthService } from '@/lib/adminAuthService';
 import { GarminService } from '@/lib/garminService';
 import { runTimelineService, RunTimeline } from '@/lib/runTimelineService';
 import { waypointCompletionService } from '@/lib/waypointCompletionService';
+import { LIVE_TRACKING_PAUSED } from '@/lib/viaTransilvanicaConfig';
 
 interface GarminTrackerProps {
   totalDistance: number;
@@ -149,26 +150,24 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     };
     
     checkAdminStatus();
-    
-    // Set up interval to check admin status periodically - reduced to every hour for maximum performance
-    const interval = setInterval(checkAdminStatus, 3600000); // Changed to every hour (3600 seconds)
 
-    return () => {
-      clearInterval(interval);
-    };
+    if (LIVE_TRACKING_PAUSED) return;
+
+    const interval = setInterval(checkAdminStatus, 3600000); // Every hour
+    return () => clearInterval(interval);
   }, []);
 
   // Automatic location fetching every 10 minutes (since Garmin updates every 10 minutes)
   useEffect(() => {
+    if (LIVE_TRACKING_PAUSED) return;
+
     const fetchLocationInterval = setInterval(async () => {
       try {
-        // Only fetch if we have a Garmin service configured
         if (garminService && garminService.isAuthenticated()) {
           console.log('🔄 Auto-fetching location from Garmin...');
           const result = await garminService.getCurrentLocation();
           if (result.success && result.location) {
             console.log('✅ Auto-fetched location:', result.location);
-            // Reload data to show new location
             await loadData();
           } else {
             console.log('⚠️ Auto-fetch failed:', result.message);
@@ -182,20 +181,20 @@ const GarminTracker: React.FC<GarminTrackerProps> = ({
     return () => clearInterval(fetchLocationInterval);
   }, [garminService]);
 
-  // Load initial data
+  // Load initial data (always); when not paused, subscribe to live updates
   useEffect(() => {
     loadData();
     loadRunTimeline();
-    
-    // Set up real-time listeners
-    const unsubscribeLocations = locationService.onLocationsUpdate(setLocations);
 
+    if (LIVE_TRACKING_PAUSED) return;
+
+    const unsubscribeLocations = locationService.onLocationsUpdate(setLocations);
     const unsubscribeTimeline = runTimelineService.onTimelineUpdate(setRunTimeline);
-    
-          return () => {
-        unsubscribeLocations();
-        unsubscribeTimeline();
-      };
+
+    return () => {
+      unsubscribeLocations();
+      unsubscribeTimeline();
+    };
   }, []);
 
   // Load run timeline

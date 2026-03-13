@@ -44,6 +44,7 @@ import WaypointForm from './WaypointForm';
 import { ref, set, get } from 'firebase/database';
 import { database } from '../../lib/firebase';
 import { performanceService } from '../../lib/performanceService';
+import { LIVE_TRACKING_PAUSED } from '../../lib/viaTransilvanicaConfig';
 
 // Simple performance optimization: Debounce function
 const debounce = (func: Function, wait: number) => {
@@ -138,7 +139,8 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
   // State for pre-calculated waypoint data
   const [waypointPopupData, setWaypointPopupData] = useState<Record<string, any>>({});
   const [popupDataLoading, setPopupDataLoading] = useState<Record<string, boolean>>({});
-
+  // Defer rendering layers until map is ready (fixes Leaflet appendChild error with React 18 Strict Mode)
+  const [mapReady, setMapReady] = useState(false);
   // Clear cache when GPX data changes
   useEffect(() => {
     calculationCache.current.clear();
@@ -226,27 +228,24 @@ const TrailMap: React.FC<TrailMapProps> = ({ currentLocation, progress, complete
     }
   }, [gpxData, waypoints, precalculatedData]);
 
-  // Function to update progress on server
+  // Function to update progress on server (no-op when live tracking is paused)
   const updateServerProgress = useCallback(async () => {
-    if (!gpxData || !currentLocationPoint || !waypoints.length) return;
-    
+    if (LIVE_TRACKING_PAUSED || !gpxData || !currentLocationPoint || !waypoints.length) return;
+
     try {
-      // Find the next waypoint
       const nextWaypoint = waypoints.find(wp => !wp.isCompleted);
-      
       if (nextWaypoint) {
         await performanceService.updateProgress(currentLocationPoint, nextWaypoint.id, gpxData);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating progress on server:', error);
     }
   }, [gpxData, currentLocationPoint, waypoints]);
 
-  // Auto-update progress on server when current location actually changes (not on timer)
+  // Auto-update progress on server when current location changes (skipped when paused)
   useEffect(() => {
+    if (LIVE_TRACKING_PAUSED) return;
     if (currentLocationPoint && gpxData && waypoints.length > 0 && isRunActive) {
-      // Only update when location actually changes (not on a timer)
-      // This will trigger when currentLocationPoint changes (every 10 minutes)
       updateServerProgress();
     }
   }, [currentLocationPoint, updateServerProgress, gpxData, waypoints, isRunActive]);
@@ -858,11 +857,12 @@ const cachedTrackData = useMemo(() => {
     
     checkRunStatus();
     loadCompletions();
-    
-         // Check run status every 5 minutes instead of every minute to reduce loops
-     const interval = setInterval(checkRunStatus, 300000); // Check every 5 minutes
+
+    if (LIVE_TRACKING_PAUSED) return;
+
+    const interval = setInterval(checkRunStatus, 300000); // Check every 5 minutes
     const completionsUnsubscribe = waypointCompletionService.onCompletionsUpdate(setWaypointCompletions);
-    
+
     return () => {
       clearInterval(interval);
       completionsUnsubscribe();
@@ -871,15 +871,13 @@ const cachedTrackData = useMemo(() => {
 
   // Calculate progress along the track based on current location with caching
   const trackProgress = useMemo(() => {
-    // Only log when values actually change to reduce spam
     const hasGpxData = !!gpxData;
     const hasLocation = !!currentLocationPoint;
-    
-    // If run is not active, show no progress
-    if (!isRunActive) {
+    // When live tracking is paused we still show progress from furthest point; otherwise only when run is active
+    const showProgress = LIVE_TRACKING_PAUSED || isRunActive;
+    if (!showProgress) {
       return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
     }
-    
     if (!gpxData || !currentLocationPoint || gpxData.tracks.length === 0) {
       return { completedPoints: [], remainingPoints: [], completedDistance: 0, totalDistance: 0, progressPercentage: 0 };
     }
@@ -1010,40 +1008,41 @@ const cachedTrackData = useMemo(() => {
 
   // Notify parent component when progress updates
   useEffect(() => {
-    if (trackProgress.totalDistance > 0 && onProgressUpdate && trackProgress.progressPercentage > 0) {
-      // Check if progress has actually changed to prevent duplicate updates
-      const currentProgress = {
-        completedDistance: trackProgress.completedDistance,
-        totalDistance: trackProgress.totalDistance,
-        progressPercentage: trackProgress.progressPercentage
-      };
+    if (trackProgress.totalDistance <= 0 || !onProgressUpdate || trackProgress.progressPercentage <= 0) return;
 
-      const lastProgress = lastProgressUpdateRef.current;
-      if (lastProgress && 
-          Math.abs(lastProgress.completedDistance - currentProgress.completedDistance) < 0.1 && // Allow 100 meter precision differences
-          Math.abs(lastProgress.totalDistance - currentProgress.totalDistance) < 0.01 &&
-          Math.abs(lastProgress.progressPercentage - currentProgress.progressPercentage) < 0.1) {
-        return; // No significant change, don't update
-      }
+    const currentProgress = {
+      completedDistance: trackProgress.completedDistance,
+      totalDistance: trackProgress.totalDistance,
+      progressPercentage: trackProgress.progressPercentage
+    };
 
-      // Debounce progress updates to prevent rapid successive calls
-      const timeoutId = setTimeout(() => {
-        onProgressUpdate(currentProgress);
-        lastProgressUpdateRef.current = currentProgress;
-      }, 2000); // Increased debounce to 2 seconds for maximum performance
-
-      return () => clearTimeout(timeoutId);
+    const lastProgress = lastProgressUpdateRef.current;
+    if (lastProgress &&
+        Math.abs(lastProgress.completedDistance - currentProgress.completedDistance) < 0.1 &&
+        Math.abs(lastProgress.totalDistance - currentProgress.totalDistance) < 0.01 &&
+        Math.abs(lastProgress.progressPercentage - currentProgress.progressPercentage) < 0.1) {
+      return;
     }
+
+    const timeoutId = setTimeout(() => {
+      onProgressUpdate(currentProgress);
+      lastProgressUpdateRef.current = currentProgress;
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
   }, [trackProgress.completedDistance, trackProgress.totalDistance, trackProgress.progressPercentage, onProgressUpdate]);
 
   // Load waypoints on component mount
   useEffect(() => {
     const loadWaypoints = async () => {
       try {
-        // console.log('Loading waypoints...');
         const waypointsData = await WaypointService.getAllWaypoints();
-        // console.log('Waypoints loaded:', waypointsData);
-        setWaypoints(waypointsData);
+        const validWaypoints = waypointsData.filter(waypoint =>
+          waypoint.coordinates &&
+          Math.abs(waypoint.coordinates.lat) > 0.001 &&
+          Math.abs(waypoint.coordinates.lng) > 0.001
+        );
+        setWaypoints(validWaypoints);
       } catch (error) {
         console.error('Error loading waypoints:', error);
       }
@@ -1051,34 +1050,26 @@ const cachedTrackData = useMemo(() => {
 
     loadWaypoints();
 
-    // Subscribe to waypoint changes
+    if (LIVE_TRACKING_PAUSED) return;
+
     const unsubscribe = WaypointService.subscribeToWaypoints((waypointsData) => {
-      // Filter out invalid waypoints with coordinates 0,0
-      const validWaypoints = waypointsData.filter(waypoint => 
-        waypoint.coordinates && 
-        Math.abs(waypoint.coordinates.lat) > 0.001 && 
+      const validWaypoints = waypointsData.filter(waypoint =>
+        waypoint.coordinates &&
+        Math.abs(waypoint.coordinates.lat) > 0.001 &&
         Math.abs(waypoint.coordinates.lng) > 0.001
       );
-      
-      // Log if we found invalid waypoints
       if (validWaypoints.length !== waypointsData.length) {
-        console.warn(`Filtered out ${waypointsData.length - validWaypoints.length} invalid waypoints with coordinates 0,0`);
-        
-        // Find and remove invalid waypoints from database
         waypointsData.forEach(waypoint => {
-          if (!waypoint.coordinates || 
-              Math.abs(waypoint.coordinates.lat) < 0.001 || 
+          if (!waypoint.coordinates ||
+              Math.abs(waypoint.coordinates.lat) < 0.001 ||
               Math.abs(waypoint.coordinates.lng) < 0.001) {
-            console.warn(`Removing invalid waypoint: ${waypoint.name} (ID: ${waypoint.id})`);
             WaypointService.deleteWaypoint(waypoint.id).catch(error => {
               console.error('Failed to remove invalid waypoint:', error);
             });
           }
         });
       }
-      
       setWaypoints(validWaypoints);
-                // Removed setWaypointsTimestamp(Date.now()) to prevent unnecessary re-renders
     });
 
     return unsubscribe;
@@ -1091,18 +1082,13 @@ const cachedTrackData = useMemo(() => {
               setIsAdmin(isAdminUser);
     };
     
-    // Check initial status
     checkAdminStatus();
-    
-    // Load start/finish dates from Firebase
     loadStartFinishDates();
-    
-    // Set up interval to check admin status periodically
-    const interval = setInterval(checkAdminStatus, 3600000); // Changed to every hour (3600 seconds) for better performance
 
-    return () => {
-      clearInterval(interval);
-    };
+    if (LIVE_TRACKING_PAUSED) return;
+
+    const interval = setInterval(checkAdminStatus, 3600000); // Every hour
+    return () => clearInterval(interval);
   }, []);
 
   // Auto-save start/finish dates when they change
@@ -1118,44 +1104,71 @@ const cachedTrackData = useMemo(() => {
   useEffect(() => {
     const loadInitialLocation = async () => {
       try {
-        const latestLocation = await locationService.getLatestLocation();
-        setCurrentLocationPoint(latestLocation);
+        if (LIVE_TRACKING_PAUSED) {
+          // When paused: use the location furthest along the track, but ignore the last 2% of the track
+          // (avoids test/bad points at the end forcing 100%).
+          const locations = await locationService.getLocations();
+          if (locations.length === 0) return;
+          if (!gpxData?.tracks?.[0]?.points?.length) {
+            setCurrentLocationPoint(locations[locations.length - 1]);
+            return;
+          }
+          const points = gpxData.tracks[0].points;
+          const maxIndexCap = Math.floor(points.length * 0.98); // Ignore last 2% of track
+          let bestLocation: LocationPoint | null = null;
+          let bestIndex = -1;
+          for (const loc of locations) {
+            let closestIndex = 0;
+            let minDist = Infinity;
+            points.forEach((p, i) => {
+              const d = calculateDistance([loc.lat, loc.lng], p);
+              if (d < minDist) {
+                minDist = d;
+                closestIndex = i;
+              }
+            });
+            if (minDist <= 5 && closestIndex > bestIndex && closestIndex <= maxIndexCap) {
+              bestIndex = closestIndex;
+              bestLocation = loc;
+            }
+          }
+          setCurrentLocationPoint(bestLocation ?? locations[locations.length - 1]);
+        } else {
+          const latestLocation = await locationService.getLatestLocation();
+          setCurrentLocationPoint(latestLocation);
+        }
       } catch (error) {
         console.error('Error loading initial location:', error);
       }
     };
 
-    // Load initial location
     loadInitialLocation();
+
+    if (LIVE_TRACKING_PAUSED) return;
 
     // Subscribe to real-time location updates with debouncing
     let locationUpdateTimeout: NodeJS.Timeout;
     const unsubscribe = locationService.onLatestLocationUpdate((latestLocation) => {
-      // Debounce location updates to prevent rapid successive re-renders
       clearTimeout(locationUpdateTimeout);
       locationUpdateTimeout = setTimeout(() => {
         if (latestLocation) {
-          // Only update if location has actually changed significantly (more than 10 meters)
           setCurrentLocationPoint(prevLocation => {
             if (!prevLocation) return latestLocation;
-            
             const distance = calculateDistance(
               [prevLocation.lat, prevLocation.lng],
               [latestLocation.lat, latestLocation.lng]
             );
-            
-            // Only update if location changed by more than 100 meters (0.1km)
             return distance > 0.1 ? latestLocation : prevLocation;
           });
         }
-      }, 500); // 500ms debounce for location updates
+      }, 500);
     });
 
     return () => {
       clearTimeout(locationUpdateTimeout);
       unsubscribe();
     };
-  }, []);
+  }, [LIVE_TRACKING_PAUSED, gpxData]);
 
   // Waypoint management functions
   // Waypoint click is now handled directly in the popup
@@ -1360,25 +1373,39 @@ const cachedTrackData = useMemo(() => {
 
   // Function to get pre-calculated waypoint data for instant popup display
   const getWaypointPopupData = useCallback(async (waypointId: string) => {
-    // If we already have the data, return it immediately
     if (waypointPopupData[waypointId]) {
       return waypointPopupData[waypointId];
     }
-
-    // If we're already loading this waypoint, don't load again
     if (popupDataLoading[waypointId]) {
+      return null;
+    }
+
+    if (LIVE_TRACKING_PAUSED) {
+      // When paused, don't call the API; use cached data from localStorage if available
+      if (currentLocationPoint) {
+        const cacheKey = `waypointData_${currentLocationPoint.lat}_${currentLocationPoint.lng}`;
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            const data = parsed[waypointId];
+            if (data) {
+              setWaypointPopupData(prev => ({ ...prev, [waypointId]: data }));
+              return data;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
       return null;
     }
 
     try {
       setPopupDataLoading(prev => ({ ...prev, [waypointId]: true }));
-      
       const { performanceService } = await import('@/lib/performanceService');
       const data = await performanceService.getPrecalculatedWaypointData(waypointId);
-      
-      // Cache the data
       setWaypointPopupData(prev => ({ ...prev, [waypointId]: data }));
-      
       return data;
     } catch (error) {
       console.error('Error getting waypoint popup data:', error);
@@ -1386,7 +1413,7 @@ const cachedTrackData = useMemo(() => {
     } finally {
       setPopupDataLoading(prev => ({ ...prev, [waypointId]: false }));
     }
-  }, [waypointPopupData, popupDataLoading]);
+  }, [waypointPopupData, popupDataLoading, currentLocationPoint]);
 
   // Function to check if waypoint data is loading
   const isWaypointDataLoading = useCallback((waypointId: string) => {
@@ -1395,8 +1422,8 @@ const cachedTrackData = useMemo(() => {
 
   // Smart background updates - only update modified waypoints incrementally
   const startSmartBackgroundUpdates = useCallback(async () => {
-    if (!waypoints.length || !currentLocationPoint || !gpxData) return;
-    
+    if (LIVE_TRACKING_PAUSED || !waypoints.length || !currentLocationPoint || !gpxData) return;
+
     try {
       console.log('🚀 Starting smart background updates for modified waypoints...');
       
@@ -1505,8 +1532,8 @@ const cachedTrackData = useMemo(() => {
 
   // Pre-load all waypoint data for instant popup display with batch loading and caching
   const preloadAllWaypointData = useCallback(async () => {
-    if (!waypoints.length || !currentLocationPoint || !gpxData) return;
-    
+    if (LIVE_TRACKING_PAUSED || !waypoints.length || !currentLocationPoint || !gpxData) return;
+
     try {
       console.log('🔄 Pre-loading waypoint data for instant popups...');
       
@@ -1621,51 +1648,27 @@ const cachedTrackData = useMemo(() => {
     }
   }, [waypoints, currentLocationPoint, gpxData, startSmartBackgroundUpdates]);
 
-  // Pre-load waypoint data when map is ready and has all necessary data
+  // Pre-load waypoint data when map is ready (skipped when live tracking paused to avoid many API calls)
   useEffect(() => {
-    console.log('🔍 useEffect check for auto-preloading:', {
-      hasMapRef: !!mapRef.current,
-      waypointsLength: waypoints.length,
-      hasCurrentLocation: !!currentLocationPoint,
-      hasGpxData: !!gpxData,
-      isRunActive: isRunActive
-    });
-    
-    // Log current state values for debugging
-    console.log('📊 Current state values:', {
-      waypoints: waypoints.slice(0, 3).map(w => ({ id: w.id, name: w.name })), // First 3 waypoints
-      currentLocationPoint,
-      gpxData: gpxData ? { tracks: gpxData.tracks.length } : null,
-      isRunActive
-    });
-    
-    if (mapRef.current && waypoints.length > 0 && currentLocationPoint && gpxData) {
-      console.log('✅ All conditions met, starting auto-preload in 1 second...');
-      // Small delay to ensure map is fully rendered
-      const timer = setTimeout(() => {
-        console.log('🚀 Auto-preload timer fired, calling preloadAllWaypointData...');
-        preloadAllWaypointData();
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    } else {
-      console.log('❌ Auto-preload conditions not met yet');
-      if (!mapRef.current) console.log('  - Missing mapRef');
-      if (!waypoints.length) console.log('  - No waypoints');
-      if (!currentLocationPoint) console.log('  - No current location');
-      if (!gpxData) console.log('  - No GPX data');
-    }
+    if (LIVE_TRACKING_PAUSED) return;
+    if (!mapRef.current || waypoints.length === 0 || !currentLocationPoint || !gpxData) return;
+
+    const timer = setTimeout(() => {
+      preloadAllWaypointData();
+    }, 1000);
+
+    return () => clearTimeout(timer);
   }, [mapRef.current, waypoints.length, currentLocationPoint, gpxData, preloadAllWaypointData]);
 
   // Periodic background updates every 5 minutes (slightly more frequent than server)
   useEffect(() => {
-    if (!waypoints.length || !currentLocationPoint || !gpxData) return;
-    
+    if (LIVE_TRACKING_PAUSED || !waypoints.length || !currentLocationPoint || !gpxData) return;
+
     const updateInterval = setInterval(() => {
       console.log('⏰ Periodic background update check...');
       startSmartBackgroundUpdates();
     }, 5 * 60 * 1000); // Every 5 minutes - more frequent than server
-    
+
     return () => clearInterval(updateInterval);
   }, [waypoints.length, currentLocationPoint, gpxData, startSmartBackgroundUpdates]);
 
@@ -1849,7 +1852,7 @@ const cachedTrackData = useMemo(() => {
         </Box>
       )}
 
-      {/* Map Container */}
+      {/* Map Container - whenReady defers layers until map panes exist (avoids appendChild error) */}
     <MapContainer
         center={currentLocationPoint ? [currentLocationPoint.lat, currentLocationPoint.lng] : [currentLocation.lat, currentLocation.lng]}
       zoom={8}
@@ -1860,7 +1863,10 @@ const cachedTrackData = useMemo(() => {
           maxHeight: '800px'  // Maximum height for large screens
         }}
       ref={mapRef}
+      whenReady={() => setMapReady(true)}
     >
+      {mapReady && (
+        <>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1910,7 +1916,6 @@ const cachedTrackData = useMemo(() => {
         >
             <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
             {trackProgress.progressPercentage > 0 ? trackProgress.progressPercentage.toFixed(1) : progress.toFixed(1)}% complet
-            {/* {precalculatedData && precalculatedData.trackDistances ? ' (Server)' : ' (Client)'} */}
             </Typography>
             
             {/* Run Status Indicator */}
@@ -1920,10 +1925,9 @@ const cachedTrackData = useMemo(() => {
               {!runTimeline && " (No timeline set)"}
             </Typography>
             
-                    <Typography variant="caption" color="text.secondary">
-            {trackProgress.completedDistance > 0 ? trackProgress.completedDistance.toFixed(2) : completedDistance.toFixed(2)} / {trackProgress.totalDistance > 0 ? trackProgress.totalDistance.toFixed(2) : '1400'} km
-            {/* {precalculatedData && precalculatedData.trackDistances ? ' (Server)' : ' (Client)'} */}
-          </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {trackProgress.completedDistance > 0 ? trackProgress.completedDistance.toFixed(2) : completedDistance.toFixed(2)} / {trackProgress.totalDistance > 0 ? trackProgress.totalDistance.toFixed(2) : '1400'} km
+            </Typography>
           
           {gpxLoading && (
             <Typography variant="caption" display="block" color="primary">
@@ -1950,38 +1954,23 @@ const cachedTrackData = useMemo(() => {
             let completedElevationGain = 0;
             
             if (precalculatedData && precalculatedData.trackDistances && precalculatedData.trackDistances.totalElevationGain) {
-              // Use server-calculated elevation data
               totalElevationGain = precalculatedData.trackDistances.totalElevationGain;
-              
-              // Calculate completed elevation gain based on progress
               if (currentLocationPoint && trackProgress.completedPoints.length > 0) {
-                const progressPercentage = trackProgress.progressPercentage;
-                completedElevationGain = Math.round(totalElevationGain * (progressPercentage / 100));
+                completedElevationGain = Math.round(totalElevationGain * (trackProgress.progressPercentage / 100));
               }
             } else {
-              // Fallback to client-side calculation
               const allElevations = gpxData.tracks.flatMap(track => track.elevation || []);
               const validElevations = allElevations.filter(elev => typeof elev === 'number' && !isNaN(elev));
-              
               if (validElevations.length > 0) {
-                // Calculate total elevation gain for the entire trail
                 for (let i = 1; i < validElevations.length; i++) {
                   const elevationDiff = validElevations[i] - validElevations[i - 1];
-                  if (elevationDiff > 0) {
-                    totalElevationGain += elevationDiff;
-                  }
+                  if (elevationDiff > 0) totalElevationGain += elevationDiff;
                 }
-                
-                // Calculate elevation gain up to current location
                 if (currentLocationPoint && trackProgress.completedPoints.length > 0) {
-                  // Use the length of completed points to determine how many elevation points to include
                   const completedElevations = validElevations.slice(0, trackProgress.completedPoints.length);
-                  
                   for (let i = 1; i < completedElevations.length; i++) {
                     const elevationDiff = completedElevations[i] - completedElevations[i - 1];
-                    if (elevationDiff > 0) {
-                      completedElevationGain += elevationDiff;
-                    }
+                    if (elevationDiff > 0) completedElevationGain += elevationDiff;
                   }
                 }
               }
@@ -2764,6 +2753,8 @@ const cachedTrackData = useMemo(() => {
         </Marker>
       )}
 
+        </>
+      )}
 
     </MapContainer>
 

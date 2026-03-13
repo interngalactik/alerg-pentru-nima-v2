@@ -25,6 +25,7 @@ import { parseGPX, ParsedGPX } from '@/lib/gpxParser';
 import { LocationPoint } from '@/lib/locationService';
 import { AdminAuthService } from '@/lib/adminAuthService';
 import { runTimelineService } from '@/lib/runTimelineService';
+import { LIVE_TRACKING_PAUSED } from '@/lib/viaTransilvanicaConfig';
 
 // Dynamically import the map component to avoid SSR issues
 const TrailMap = dynamic(() => import('@/components/via-transilvanica/TrailMap'), {
@@ -223,9 +224,10 @@ const ViaTransilvanicaPage = () => {
     };
 
     fetchSmsCount(); // Call fetch function on component mount
-    const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
-
-    return () => clearInterval(intervalId);
+    if (!LIVE_TRACKING_PAUSED) {
+      const intervalId = setInterval(fetchSmsCount, 30 * 60 * 1000); // Fetch every 30 minutes
+      return () => clearInterval(intervalId);
+    }
   }, []);
 
   // Get total km run from Strava - always fetch fresh data
@@ -307,13 +309,14 @@ const ViaTransilvanicaPage = () => {
 
     window.addEventListener('storage', handleStorageChange);
 
-    // Refresh Strava data every 30 minutes to keep it current (increased from 15 minutes for better performance)
-    const intervalId = setInterval(fetchStravaData, 30 * 60 * 1000); // 30 minutes
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(intervalId);
-    };
+    if (!LIVE_TRACKING_PAUSED) {
+      const intervalId = setInterval(fetchStravaData, 30 * 60 * 1000); // 30 minutes
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        clearInterval(intervalId);
+      };
+    }
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   return (
@@ -376,9 +379,12 @@ const ViaTransilvanicaPage = () => {
           {/* Mission Statement */}
           <Box sx={{ mb: 4, maxWidth: '60em', mx: 'auto' }}>
             <Typography variant="body1" sx={{ mb: 2, fontSize: '1.2rem', lineHeight: 1.6 }}>
-              Salutare! Eu sunt <a href="/#despre" style={{ textDecoration: 'underline' }}>Edi</a> și pe 1 septembrie 2025 {isClient && timeUntilStart > 0 ? 'voi porni' : 'am pornit'} în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
+              Salutare! Eu sunt <a href="/#despre" style={{ textDecoration: 'underline' }}>Edi</a> și pe 1 septembrie 2025 am pornit în alergare pe traseul <a href="https://www.via-transilvanica.ro/" target='__blank' style={{ color: '#EF7D00', textDecoration: 'underline' }}>Via Transilvanica</a> pentru a susține{' '}
               <a href="https://sanctuarnima.ro" target='__blank'><strong style={{ color: 'var(--orange)', textDecoration: 'underline' }}>Sanctuarul Nima</strong></a> - primul sanctuar din România 
               destinat animalelor de fermă salvate de la abator sau exploatare. Aici își trăiesc viețile acum în pace și armonie peste <a href="https://sanctuarnima.ro/rezidenti/" target='__blank' style={{ color: 'var(--blue)', fontWeight: '900', textDecoration: 'underline' }}>140 de animale</a> din 12 specii diferite.
+              <br></br>
+              <br></br>
+              Am parcurs peste 60% din distanță în 15 zile: 845km cu peste 21 000m diferență de nivel, însă din cauza unor probleme medicale am fost nevoit să mă opresc. Plănuiesc să revin în 2026 pentru a finaliza traseul.
             </Typography>
             <Typography variant="body1" sx={{ mb: 3, fontSize: '1.2rem', lineHeight: 1.6 }}>
               Însă nu o pot face fără ajutorul tău. Pentru a putea acoperi costurile de hrană lunară sanctuarul are nevoie de <span style={{ color: 'var(--blue)', fontWeight: '900' }}>7000 de SMS-uri</span> în valoare de <span style={{ color: 'var(--blue)', fontWeight: '900' }}>2 euro / lună</span>. Alătură-te și tu celor <span style={{ color: 'var(--orange)', fontWeight: '900' }}>{smsCount}</span> de susținători.
