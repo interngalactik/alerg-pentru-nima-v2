@@ -42,18 +42,25 @@ interface Race {
   categoryPlace?: string;
 }
 
+// Map year to Google Sheet tab GID. To get a sheet's GID: open the spreadsheet, click the sheet tab, copy the number after #gid= in the URL.
+const YEAR_SHEET_IDS: Record<number, string> = {
+  2024: '0',
+  2025: '1758931029',
+  2026: '927531677', // TODO: Replace with your 2026 sheet GID (from the sheet tab URL #gid=...)
+};
+
+const YEARS = [2024, 2025, 2026] as const;
+
 const RacesTable = () => {
   // Get current year
   const currentYear = new Date().getFullYear();
-  
+
   // Set initial sheetId based on current year
   const getInitialSheetId = () => {
-    if (currentYear === 2024) return '0';
-    if (currentYear === 2025) return '1758931029';
-    // If year is beyond 2025, default to latest year (2025)
-    if (currentYear > 2025) return '1758931029';
-    // If year is before 2024, default to earliest year (2024)
-    return '0';
+    if (currentYear >= 2026) return YEAR_SHEET_IDS[2026];
+    if (currentYear === 2025) return YEAR_SHEET_IDS[2025];
+    if (currentYear <= 2024) return YEAR_SHEET_IDS[2024];
+    return YEAR_SHEET_IDS[2025];
   };
 
   const [csvData, setCsvData] = useState<Race[]>([]);
@@ -100,39 +107,44 @@ const RacesTable = () => {
     setSheetId(sheetId); // Update the selected year
   };
 
+  const currentYearIndex = YEARS.findIndex((y) => YEAR_SHEET_IDS[y] === sheetId);
+  const currentDisplayYear = currentYearIndex >= 0 ? YEARS[currentYearIndex] : 2025;
+  const hasPrev = currentYearIndex > 0;
+  const hasNext = currentYearIndex >= 0 && currentYearIndex < YEARS.length - 1;
+
   const YearSelector = () => (
     <div className="table_section">
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
         width: '100%',
         margin: '0 auto'
       }}>
-        <a 
-          href="#" 
+        <a
+          href="#"
           className="paragraph table_year"
           onClick={(e) => {
             e.preventDefault();
-            handleYearChange('0');
+            if (hasPrev) handleYearChange(YEAR_SHEET_IDS[YEARS[currentYearIndex - 1]]);
           }}
-          style={{ visibility: sheetId === '1758931029' ? 'visible' : 'hidden' }}
+          style={{ visibility: hasPrev ? 'visible' : 'hidden' }}
         >
-          &lt; 2024
+          &lt; {hasPrev ? YEARS[currentYearIndex - 1] : ''}
         </a>
         <p className="paragraph table_year active">
-          {sheetId === '1758931029' ? '2025' : '2024'}
+          {currentDisplayYear}
         </p>
-        <a 
-          href="#" 
+        <a
+          href="#"
           className="paragraph table_year"
           onClick={(e) => {
             e.preventDefault();
-            handleYearChange('1758931029');
+            if (hasNext) handleYearChange(YEAR_SHEET_IDS[YEARS[currentYearIndex + 1]]);
           }}
-          style={{ visibility: sheetId === '0' ? 'visible' : 'hidden' }}
+          style={{ visibility: hasNext ? 'visible' : 'hidden' }}
         >
-          2025 &gt;
+          {hasNext ? YEARS[currentYearIndex + 1] : ''} &gt;
         </a>
       </div>
       <div className="_15-spacer"></div>
@@ -188,7 +200,7 @@ const RacesTable = () => {
                   </Box>
                 </TableCell>
               </TableRow>
-            ) : csvData.length === 0 && sheetId === '1758931029' ? (
+            ) : csvData.length === 0 && currentYearIndex >= 1 ? (
               <TableRow>
                 <TableCell colSpan={8} sx={{ border: 0, padding: 0, width: '100%' }}>
                   <Box sx={{ 
